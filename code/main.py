@@ -31,16 +31,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             prog="CMRxRecon2024",
             description="Multicontrast Reconstruction",
-            epilogue="Have a good day!"
+            epilog="Have a good day!"
             )
 
     parser.add_argument("--input_dir")
     parser.add_argument("--predict_dir")
     parser.add_argument("--weights_dir")
 
-    print(parser.input_dir)
-    print(parser.predict_dir)
-    print(parser.weights_dir)
+    args = parser.parse_args()
+
+    print(args.input_dir)
+    print(args.predict_dir)
+    print(args.weights_dir)
 
 
 
