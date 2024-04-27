@@ -1,4 +1,4 @@
 #!/usr/bin/bash
 
-docker build -t debug -f Dockerfile .
-docker run --gpus all -v /hdd/Usamp_Scan_Data/CMRxRecon_Data/:/input -v /hdd/Usamp_Scan_Data/CMRxReconSubmission/FlipX:/output --rm debug
+sudo docker build -t debug -f Dockerfile .
+sudo docker run --gpus all -v /hdd/Data/CMRxRecon/:/input -v /hdd/Data/CMRxReconOutput/:/output --rm debug
