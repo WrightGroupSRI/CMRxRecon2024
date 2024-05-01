@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ###############################################################
-# CMRXRECON.RECON MODULE
+# CMRXRECON MODULE
 # functions for diffferent reconstruction modes
 #
 # Calder Sheagren

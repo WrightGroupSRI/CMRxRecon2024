@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 ###############################################################
-# SCRIPT TITLE
-# script functionality
+# ZERO-FILLED RECONSTRUCTION
+# Bart Fourier reconstruction 
 #
 # Calder Sheagren
 # University of Toronto
