@@ -32,7 +32,7 @@ def writemat(key=None, data=None, path=None):
     assert(key), "Please pass in key"
     assert(data.ndim > 0), "Please pass in data"
     assert(path), "Please pass in path"
-    hf.savemat(path, {key:data}, appendmat=False)
+    hf.savemat(path, {key:data}, appendmat=True)
     return path
 
 def post_crop(x):

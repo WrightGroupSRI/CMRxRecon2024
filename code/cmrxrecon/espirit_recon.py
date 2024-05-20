@@ -39,5 +39,6 @@ def espirit_recon(kspace=None, mask=None):
     # transpose to CMRxRecon format
 
     espirit_recon_reshaped = np.transpose(espirit_recon_image, (3, 2, 1, 0))
+    print(espirit_recon_reshaped.shape)
 
     return espirit_recon_reshaped

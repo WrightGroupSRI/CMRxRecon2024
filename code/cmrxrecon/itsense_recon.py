@@ -32,12 +32,11 @@ def itsense_recon(kspace=None, mask=None):
 
         itsense_maps = np.expand_dims(sens_maps[:, :, i, :], axis=0)
 
-        aux_recon = bart(1, "pics -g -l2 -r0.1", itsense_kspace, itsense_maps)
+        aux_recon = bart(1, "pics -g -l2 -r0.1 -d5", itsense_kspace, itsense_maps)
 
         itsense_recon_image[:, :, i, :] = aux_recon[0, :, :, 0, 0, :]
 
     # transpose to CMRxRecon format
 
     itsense_recon_reshaped = np.transpose(itsense_recon_image, (3, 2, 1, 0))
-
     return itsense_recon_reshaped

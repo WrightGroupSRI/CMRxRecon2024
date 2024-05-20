@@ -102,22 +102,39 @@ def main(args):
                         masked_kspace = kspace * np.broadcast_to(mask, kspace.shape)
                     except:
                         masked_kspace = copy.deepcopy(kspace)
-                        # manual multiplication
+                        for i in range(kspace.shape[1]):
+                            for j in range(kspace.shape[2]):
+                                masked_kspace[:, i, j, :, :] *= mask
+
                     print("KSP MASK", masked_kspace.shape)
 
                     img = recon_func(kspace=masked_kspace, mask=mask)
 
-                    cfl.writecfl(os.path.join(pt_dir_output, prefix), post_crop(img))
+                    if "Uniform" in m:
+
+                        R = m.split(".mat")[0].split("Uniform")[-1]
+
+                        fname = f"{prefix}_kus_Uniform{R}"
+
+                    else:
+
+                        SamplingR = m.split(".mat")[0].split("kt")[-1]
+
+                        fname = f"{prefix}_kus_kt{SamplingR}"
+
+                    dest_path = os.path.join(pt_dir_output, fname)
+
+                    cfl.writecfl(dest_path, post_crop(img))
                     # fix naming conventions
-                    writemat(key="img4ranking", data=post_crop(img), path=os.path.join(pt_dir_output, f"{prefix}.mat"))
+                    writemat(key="img4ranking", data=post_crop(img), path=dest_path)
 
                     break # masks
 
-                # break # mat file
+                break # mat file
 
             break # patients
 
-        # break # modalities
+        break # modalities
 
 
 if __name__ == '__main__': 
