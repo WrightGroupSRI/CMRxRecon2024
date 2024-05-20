@@ -24,18 +24,9 @@ def try_dir(path):
 def loadmat(key=None, path=None):
     assert(path), "Please pass in filepath"
     with h5py.File(path) as f:
-        if key:
-            data = f[key]
-        else:
-            print(f.keys())
-        try:
-            data = data['real'] + 1j * data['imag']
-        except:
-            pass
-
-    # data = mat73.loadmat(path)
-    # array = data.get(key)
-    return data
+        keys = list(f.keys())
+        if len(keys) == 1:
+            return np.array(f[keys[0]])
 
 def writemat(key=None, data=None, path=None):
     assert(key), "Please pass in key"
@@ -43,3 +34,8 @@ def writemat(key=None, data=None, path=None):
     assert(path), "Please pass in path"
     hf.savemat(path, {key:data}, appendmat=False)
     return path
+
+def post_crop(x):
+    st, sz, sy, sx = x.shape
+    # fix
+    return x[:, :, sy // 4:3 * sy // 4, sx // 3: 2 * sx // 3]

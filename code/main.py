@@ -18,6 +18,7 @@ import sys
 
 import glob
 import time
+import copy
 from datetime import datetime
 
 from utils import *
@@ -41,53 +42,82 @@ def main(args):
             recon_func = cxr.espirit_recon
 
     match args.challenge:
+        case "training":
+            dataset = "TrainingSet"
+            modalities = ["Aorta", "Cine", "Mapping", "Tagging"]
+            sample = "FullSample"
         case "validation":
             dataset = "ValidationSet"
+            modalities = ["Aorta", "BlackBlood", "Cine", "Flow2d", "Mapping", "Tagging"]
 
-    data_dir = os.path.join(args.input_dir, "MultiCoil", "Mapping", dataset)
+
 
     _ = try_dir(args.predict_dir)
     _ = try_dir(os.path.join(args.predict_dir, "MultiCoil")) 
-    _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", "Mapping"))
-    output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", "Mapping", dataset))
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    for mod in modalities:
+        data_dir = os.path.join(args.input_dir, "MultiCoil", mod, dataset)
 
-    for a in ["04", "08", "10"]:
-        acc_factor = f"AccFactor{a}"
+        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
+        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
+        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset))
+        output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset, sample))
 
-        acc_dir = os.path.join(data_dir, acc_factor)
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-        acc_dir_output = try_dir(os.path.join(output_dir, acc_factor))
+        for pt in glob.glob(os.path.join(data_dir, sample, "P*")):
 
-        if not os.path.exists(acc_dir):
-            print(acc_dir, "does not exist")
-            continue
+            pt_folder = pt.split("/")[-1]
 
-        for pt in glob.glob(os.path.join(acc_dir, "P*")):
+            pt_dir_output = try_dir(os.path.join(output_dir, pt_folder))
 
-            pt_dir_output = try_dir(os.path.join(acc_dir_output, pt.split("/")[-1]))
+            for mat_file in glob.glob(os.path.join(pt, "*.mat")):
 
-            T1map = os.path.join(pt, "T1map.mat")
+                print("Processing", mat_file)
 
-            T2map = os.path.join(pt, "T2map.mat")
+                _ksp = loadmat(path=mat_file)
 
-            T1map_mask = os.path.join(pt, "T1map_mask.mat")
+                kspace = _ksp['real'] + 1j * _ksp['imag']
 
-            T2map_mask = os.path.join(pt, "T2map_mask.mat")
+                print("KSPACE:", kspace.shape)
 
-            for (kspace_path, mask_path) in zip([T1map, T2map], [T1map_mask, T2map_mask]):
+                prefix = mat_file.split("/")[-1].split(".mat")[0]
 
-                mask = loadmat(key=f"mask{a}", path=mask_path)
+                mask1_list = os.listdir(os.path.join(data_dir, "Mask_Task1", pt_folder))
 
-                kspace = loadmat(key=f"kspace_sub{a}", path=kspace_path)
+                masks1 = [os.path.join(data_dir, "Mask_Task1", pt_folder, m) for m in mask1_list if prefix in m]
 
-                img = recon_func(kspace=kspace, mask=mask)
+                mask2_list = os.listdir(os.path.join(data_dir, "Mask_Task2", pt_folder))
 
-                # temporary
-                cfl.writecfl(os.path.join(pt_dir_output, kspace_path.split("/")[-1].split(".mat")[0]), img)
+                masks2 = [os.path.join(data_dir, "Mask_Task2", pt_folder, m) for m in mask2_list if prefix in m]
 
-                writemat(key="img4ranking", data=img, path=os.path.join(pt_dir_output, kspace_path.split("/")[-1]))
+                masks = masks1 + masks2
+
+                for m in masks:
+                    print("Processing", m)
+                    mask = np.array(loadmat(path=m))
+                    print("MASK:", mask.shape)
+
+                    try:
+                        masked_kspace = kspace * np.broadcast_to(mask, kspace.shape)
+                    except:
+                        masked_kspace = copy.deepcopy(kspace)
+                        # manual multiplication
+                    print("KSP MASK", masked_kspace.shape)
+
+                    img = recon_func(kspace=masked_kspace, mask=mask)
+
+                    cfl.writecfl(os.path.join(pt_dir_output, prefix), post_crop(img))
+                    # fix naming conventions
+                    writemat(key="img4ranking", data=post_crop(img), path=os.path.join(pt_dir_output, f"{prefix}.mat"))
+
+                    break # masks
+
+                # break # mat file
+
+            break # patients
+
+        # break # modalities
 
 
 if __name__ == '__main__': 
