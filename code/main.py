@@ -48,7 +48,15 @@ def main(args):
             sample = "FullSample"
         case "validation":
             dataset = "ValidationSet"
-            modalities = ["Aorta", "BlackBlood", "Cine", "Flow2d", "Mapping", "Tagging"]
+            match args.task:
+                case "task1":
+                    task = "Task1"
+                    sample = "UnderSample_Task1"
+                    modalities = ["Aorta", "BlackBlood", "Cine", "Flow2d", "Mapping", "Tagging"]
+                case "task2":
+                    task = "Task2"
+                    sample = "UnderSample_Task2"
+                    modalities = ["Aorta", "Cine", "Mapping", "Tagging"]
 
 
 
@@ -58,10 +66,18 @@ def main(args):
     for mod in modalities:
         data_dir = os.path.join(args.input_dir, "MultiCoil", mod, dataset)
 
-        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
-        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
-        _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset))
-        output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset, sample))
+        print(args.input_dir, os.listdir(os.path.join(args.input_dir, "MultiCoil", mod, dataset)))
+        print(args.predict_dir, os.listdir(os.path.join(args.predict_dir, "MultiCoil")))
+
+        match args.challenge:
+            case "training":
+                _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
+                _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset))
+                output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset, sample))
+            case "validation":
+                _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod))
+                _ = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset))
+                output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset, task))
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -81,60 +97,78 @@ def main(args):
 
                 print("KSPACE:", kspace.shape)
 
-                prefix = mat_file.split("/")[-1].split(".mat")[0]
+                match args.challenge:
+                    case "training":
+                        prefix = mat_file.split("/")[-1].split(".mat")[0]
 
-                mask1_list = os.listdir(os.path.join(data_dir, "Mask_Task1", pt_folder))
+                        mask1_list = os.listdir(os.path.join(data_dir, "Mask_Task1", pt_folder))
 
-                masks1 = [os.path.join(data_dir, "Mask_Task1", pt_folder, m) for m in mask1_list if prefix in m]
+                        masks1 = [os.path.join(data_dir, "Mask_Task1", pt_folder, m) for m in mask1_list if prefix in m]
 
-                mask2_list = os.listdir(os.path.join(data_dir, "Mask_Task2", pt_folder))
+                        mask2_list = os.listdir(os.path.join(data_dir, "Mask_Task2", pt_folder))
 
-                masks2 = [os.path.join(data_dir, "Mask_Task2", pt_folder, m) for m in mask2_list if prefix in m]
+                        masks2 = [os.path.join(data_dir, "Mask_Task2", pt_folder, m) for m in mask2_list if prefix in m]
 
-                masks = masks1 + masks2
+                        masks = masks1 + masks2
 
-                for m in masks:
-                    print("Processing", m)
-                    mask = np.array(loadmat(path=m))
-                    print("MASK:", mask.shape)
+                        for m in masks:
+                            print("Processing", m)
+                            mask = np.array(loadmat(path=m))
+                            print("MASK:", mask.shape)
 
-                    try:
-                        masked_kspace = kspace * np.broadcast_to(mask, kspace.shape)
-                    except:
-                        masked_kspace = copy.deepcopy(kspace)
-                        for i in range(kspace.shape[1]):
-                            for j in range(kspace.shape[2]):
-                                masked_kspace[:, i, j, :, :] *= mask
+                            try:
+                                masked_kspace = kspace * np.broadcast_to(mask, kspace.shape)
+                            except:
+                                masked_kspace = copy.deepcopy(kspace)
+                                for i in range(kspace.shape[1]):
+                                    for j in range(kspace.shape[2]):
+                                        masked_kspace[:, i, j, :, :] *= mask
 
-                    print("KSP MASK", masked_kspace.shape)
+                            print("KSP MASK", masked_kspace.shape)
+                            img = recon_func(kspace=masked_kspace, mask=mask)
 
-                    img = recon_func(kspace=masked_kspace, mask=mask)
 
-                    if "Uniform" in m:
+                            if "Uniform" in m:
 
-                        R = m.split(".mat")[0].split("Uniform")[-1]
+                                R = m.split(".mat")[0].split("Uniform")[-1]
 
-                        fname = f"{prefix}_kus_Uniform{R}"
+                                fname = f"{prefix}_kus_Uniform{R}"
 
-                    else:
+                            else:
 
-                        SamplingR = m.split(".mat")[0].split("kt")[-1]
+                                SamplingR = m.split(".mat")[0].split("kt")[-1]
 
-                        fname = f"{prefix}_kus_kt{SamplingR}"
+                                fname = f"{prefix}_kus_kt{SamplingR}"
 
-                    dest_path = os.path.join(pt_dir_output, fname)
+                            dest_path = os.path.join(pt_dir_output, fname)
 
-                    cfl.writecfl(dest_path, post_crop(img))
-                    # fix naming conventions
-                    writemat(key="img4ranking", data=post_crop(img), path=dest_path)
+                            cfl.writecfl(dest_path, img)
+                            # fix naming conventions
+                            writemat(key="img4ranking", data=img, path=dest_path)
 
-                    break # masks
+                            # break # masks
 
-                break # mat file
+                    case "validation":
 
-            break # patients
+                        mask = np.where(np.abs(kspace) > 0, 1, 0) 
 
-        break # modalities
+                        masked_kspace = kspace
+
+                        img = recon_func(kspace=masked_kspace, mask=mask)
+
+                        fname = mat_file.split("/")[-1].split(".mat")[0]
+
+                        dest_path = os.path.join(pt_dir_output, fname)
+
+                        cfl.writecfl(dest_path, img)
+                        # fix naming conventions
+                        writemat(key="img4ranking", data=img, path=dest_path)
+
+                # break # mat file
+
+            # break # patients
+
+        # break # modalities
 
 
 if __name__ == '__main__': 
@@ -151,6 +185,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--recon_mode") # zf, pi, cs for now
     parser.add_argument("--challenge") # train, validation, test
+    parser.add_argument("--task") # task1, task2
 
     args = parser.parse_args()
 
