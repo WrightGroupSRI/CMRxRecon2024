@@ -11,7 +11,7 @@
 ###############################################################
 
 import numpy as np
-from bart import bart 
+#from bart import bart 
 
 from .smaps import maps
 

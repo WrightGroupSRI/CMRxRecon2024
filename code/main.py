@@ -40,6 +40,8 @@ def main(args):
             recon_func = cxr.itsense_recon
         case "cs":
             recon_func = cxr.espirit_recon
+        case "vn"
+            recon_func = cxr.recon
 
     match args.challenge:
         case "training":
