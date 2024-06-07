@@ -22,12 +22,10 @@ import copy
 from datetime import datetime
 
 from utils import *
+from cflutils import readcfl, writecfl
 import cmrxrecon as cxr
 
 import argparse
-
-# temporary
-import cfl
 
 def main(args):
 
@@ -37,10 +35,10 @@ def main(args):
         case "zf":
             recon_func = cxr.zf_recon
         case "pi":
-            recon_func = cxr.itsense_recon
+            recon_func = cxr.sense_recon
         case "cs":
             recon_func = cxr.espirit_recon
-        case "vn"
+        case "vn":
             recon_func = cxr.recon
 
     match args.challenge:
@@ -54,7 +52,7 @@ def main(args):
                 case "task1":
                     task = "Task1"
                     sample = "UnderSample_Task1"
-                    modalities = ["Aorta", "BlackBlood", "Cine", "Flow2d", "Mapping", "Tagging"]
+                    modalities = ["BlackBlood", "Aorta", "Cine", "Flow2d", "Mapping", "Tagging"]
                 case "task2":
                     task = "Task2"
                     sample = "UnderSample_Task2"
@@ -67,9 +65,6 @@ def main(args):
 
     for mod in modalities:
         data_dir = os.path.join(args.input_dir, "MultiCoil", mod, dataset)
-
-        print(args.input_dir, os.listdir(os.path.join(args.input_dir, "MultiCoil", mod, dataset)))
-        print(args.predict_dir, os.listdir(os.path.join(args.predict_dir, "MultiCoil")))
 
         match args.challenge:
             case "training":
@@ -127,7 +122,7 @@ def main(args):
                                         masked_kspace[:, i, j, :, :] *= mask
 
                             print("KSP MASK", masked_kspace.shape)
-                            img = recon_func(kspace=masked_kspace, mask=mask)
+                            img = recon_func(kspace=masked_kspace, mask=mask, device=device)
 
 
                             if "Uniform" in m:
@@ -144,7 +139,7 @@ def main(args):
 
                             dest_path = os.path.join(pt_dir_output, fname)
 
-                            cfl.writecfl(dest_path, img)
+                            writecfl(dest_path, img)
                             # fix naming conventions
                             writemat(key="img4ranking", data=img, path=dest_path)
 
@@ -162,7 +157,7 @@ def main(args):
 
                         dest_path = os.path.join(pt_dir_output, fname)
 
-                        cfl.writecfl(dest_path, img)
+                        writecfl(dest_path, img)
                         # fix naming conventions
                         writemat(key="img4ranking", data=img, path=dest_path)
 

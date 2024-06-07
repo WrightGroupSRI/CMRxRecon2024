@@ -8,16 +8,7 @@ ENV TZ=America/Toronto
 RUN apt-get update
 
 # Install BART with Cuda (Based on Kelvin Chow Python-ISMRMRD Server)
-RUN apt-get install -y git cmake g++ libfftw3-dev liblapacke-dev libpng-dev gfortran
 RUN mkdir -p /opt/code
-
-# BART
-RUN cd /opt/code
-COPY bart /opt/code/bart
-
-RUN apt-get install -y bart-cuda
-
-ENV PYTHONPATH=/opt/code/bart/python
 
 # install python
 RUN apt-get install -y python3 python3-pip
