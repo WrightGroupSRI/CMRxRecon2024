@@ -19,19 +19,33 @@ class VarNetLightning(LightningModule):
         self.model = VarNet(input_channels, cascades = cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))
 
-    def training_step(self, batch, batch_index): 
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_index: int): 
+        # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
-        fs_estimate = self.model(undersampled, undersampled != 0 )
+        print(undersampled.dtype)
+        print(fully_sampled.dtype)
+
+        undersampled = undersampled.permute((1, 0, 2, 3, 4))
+        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = fs_estimate.permute((1, 0, 2, 3, 4))
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         return loss
 
+
     def validation_step(self, batch, batch_index): 
+        # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
+        print(undersampled.dtype)
+        print(fully_sampled.dtype)
+
+        undersampled = undersampled.permute((1, 0, 2, 3, 4))
         fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = fs_estimate.permute((1, 0, 2, 3, 4))
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         return loss
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

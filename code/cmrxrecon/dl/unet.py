@@ -5,24 +5,34 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl 
+from cmrxrecon.utils import root_sum_of_squares
 
 class UnetLightning(pl.LightningModule):
-    def __init__(self, input_channels: int):
+    def __init__(self, input_channels: int, depth:int = 4, chan:int = 18):
         super().__init__()
 
-        self.model = Unet(input_channels, input_channels)
+        self.model = Unet(input_channels, input_channels, depth, chan)
+
 
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled = batch
-        fs_estimate = self.model(undersampled)
+
+        y, x = undersampled.shape[-2], undersampled.shape[-1]
+        aliased = root_sum_of_squares(undersampled, coil_dim=2).reshape(-1, 1, y, x)
+        fully_sampled = root_sum_of_squares(fully_sampled, coil_dim=2).reshape(-1, 1, y, x)
+        fs_estimate = self.model(aliased)
         
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
         return loss
 
     def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled = batch
-        fs_estimate = self.model(undersampled)
-        
+
+        y, x = undersampled.shape[-2], undersampled.shape[-1]
+        aliased = root_sum_of_squares(undersampled, coil_dim=2).reshape(-1, 1, y, x)
+        fully_sampled = root_sum_of_squares(fully_sampled, coil_dim=2).reshape(-1, 1, y, x)
+        fs_estimate = self.model(aliased)
+
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
         return loss
 
