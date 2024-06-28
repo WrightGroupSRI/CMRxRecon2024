@@ -22,8 +22,6 @@ class VarNetLightning(LightningModule):
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_index: int): 
         # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
-        print(undersampled.dtype)
-        print(fully_sampled.dtype)
 
         undersampled = undersampled.permute((1, 0, 2, 3, 4))
         fs_estimate = self.model(undersampled, undersampled != 0)
@@ -36,8 +34,6 @@ class VarNetLightning(LightningModule):
     def validation_step(self, batch, batch_index): 
         # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
-        print(undersampled.dtype)
-        print(fully_sampled.dtype)
 
         undersampled = undersampled.permute((1, 0, 2, 3, 4))
         fs_estimate = self.model(undersampled, undersampled != 0)

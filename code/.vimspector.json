@@ -1,0 +1,216 @@
+{
+    "configurations": {
+        "run - default": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Python: Current File",
+                "type": "python",
+                "request": "launch",
+                "program": "${file}",
+                "cwd": "${workspaceRoot}",
+                "console": "integratedTerminal",
+                "python": "/home/kadotab/ENV/bin/python",
+                "stopOnEntry": true
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "MultiContrast": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Multicontrast dataset",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "module": "ml_recon.dataset.Brats_dataset",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal"
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "Run Subset": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Subset",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "program": "train_model.py",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": ["--use_subset", "--loss_type", "ssdu", "--contrast", "t1", "--max_epoch", "1"]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "Run Supervised": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Supervised",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "program": "train_model.py",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": ["--loss_type", "supervised", "--contrast", "t1", "--max_epoch", "1"]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },"Run Supervised Fastmri": {
+        "adapter": "debugpy",
+        "configuration": {
+            "name": "Run Supervised",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceRoot}",
+            "stopOnEntry": true,
+            "program": "train_varnet.py",
+            "python": "/home/kadotab/ENV/bin/python",
+            "console": "integratedTerminal",
+            "args": ["--loss_type", "supervised", "--contrast", "t1", "--max_epoch", "1"]
+        },
+        "breakpoints": {
+            "exception": {
+                "raised": "N",
+                "uncaught": "",
+                "userUnhandled": ""
+            }
+        }
+        },
+        "kSpace Brats": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Run Supervised",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "module": "ml_recon.dataset.kspace_brats",
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal"
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "Simulate Brats": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Simulate Brats",
+                "type": "python",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "module": "ml_recon.dataset.simulated_brats_dataset",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal"
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "Debug Test": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "module": "pytest",
+                "request": "launch",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                    "-q",
+                    "-s",
+                    "${file}"
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
+        }, 
+        "Debug LOUPE": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "train.py",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                    "--learn_sampling"
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
+        },
+        "Debug ssl": {
+            "adapter": "debugpy",
+            "configuration": {
+                "name": "Debug Tests",
+                "type": "python",
+                "request": "launch",
+                "program": "train.py",
+                "cwd": "${workspaceRoot}",
+                "stopOnEntry": true,
+                "python": "/home/kadotab/ENV/bin/python",
+                "console": "integratedTerminal",
+                "args": [
+                ]
+            },
+            "breakpoints": {
+                "exception": {
+                    "raised": "N",
+                    "uncaught": "Y",
+                    "userUnhandled": ""
+                }
+            }
+        }
+    }
+}

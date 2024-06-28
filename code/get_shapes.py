@@ -19,9 +19,9 @@ def process_file(file_name):
                 keys = list(fr.keys())
                 kspace = fr[keys[0]][:]
             
-                shape =  np.array(kspace.shape[1:])
-                if len(shape) == 3: 
-                    shape = shape[np.newaxis, :, :, :]
+                shape = np.array(kspace.shape[1:])
+                if len(shape) == 3:
+                    shape = np.concatenate((np.array([0]), shape))
                 return shape
         else: 
             return None
