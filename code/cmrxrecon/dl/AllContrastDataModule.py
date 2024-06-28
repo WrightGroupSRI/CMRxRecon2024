@@ -3,6 +3,8 @@ from torch.utils.data import DataLoader, random_split
 import torch 
 from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
 
+
+
 class AllContrastDataModule(pl.LightningDataModule):
 
     def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 1, num_workers: int = 0):
@@ -46,3 +48,19 @@ class NormalizeKSpace(object):
         return under/under.abs().amax((-1, -2), keepdim=True), fully_sampled/under.abs().amax((-1, -2), keepdim=True)
 
 
+class ZeroPadKSpace(object):
+    """Zero pad k-space data to [256, 512] in [x, y] dimensions.
+    """
+
+    def __call__(self, sample):
+        under, fully_sampled = sample
+        under = self.pad_to_shape(under, [256, 512])
+        fully_sampled = self.pad_to_shape(fully_sampled, [256, 512])
+        return under, fully_sampled
+
+    def pad_to_shape(self, tensor, target_shape):
+        _, _, x, y = tensor.shape
+        pad_x = (target_shape[0] - x) // 2
+        pad_y = (target_shape[1] - y) // 2
+        padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
+        return torch.nn.functional.pad(tensor, padding, "constant", 0)
