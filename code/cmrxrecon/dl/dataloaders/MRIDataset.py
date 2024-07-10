@@ -85,9 +85,16 @@ class MRIDataset(Dataset):
             fs_file = os.path.join(target_direcory, file, file_name)
             if not os.path.exists(fs_file):
                 continue
+            
+            
+            if task_one:
+                mask_file = file_prefix + '_mask_Uniform' + acceleration_factor + '.h5' 
+                mask_files = [os.path.join(self.mask_dir, file, mask_file)]
+            else:
+                
+                mask_files = os.listdir(os.path.join(self.mask_dir, file))
+                mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.h5' in mask_file and file_prefix in mask_file]
 
-            mask_file = file_prefix + '_mask_Uniform' + acceleration_factor + '.h5' 
-            mask_file = os.path.join(self.mask_dir, file, mask_file)
             with h5py.File(fs_file) as fr:
                 # DATA SHAPE [t, z, c, y, x]
                 if self.train:
@@ -95,9 +102,9 @@ class MRIDataset(Dataset):
                 else: 
                     slices = fr['kus'].shape[0]
         
-
-            self.file_list.append(
-                    PatientFiles(fully_sampled=fs_file, mask=mask_file, slices=slices)
+            for file in mask_files:
+                self.file_list.append(
+                    PatientFiles(fully_sampled=fs_file, mask=file, slices=slices)
                     )
                 
         print(f'Found {sum(patient.slices for patient in self.file_list)} slices!')
@@ -129,8 +136,8 @@ class MRIDataset(Dataset):
 
         mask = mask.astype(bool)
         k_space = k_space['real'] + 1j * k_space['imag']
-        k_space = k_space.astype(np.complex64)
 
+        mask = np.expand_dims(mask, 1)
         training_sample = (torch.from_numpy(k_space), torch.from_numpy(k_space*mask))
 
         if self.transforms: 

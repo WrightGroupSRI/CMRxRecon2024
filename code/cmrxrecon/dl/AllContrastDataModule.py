@@ -17,7 +17,8 @@ class AllContrastDataModule(pl.LightningDataModule):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
-                transforms=NormalizeKSpace()
+                transforms=NormalizeKSpace(),
+                task_one=False
                 )
 
         self.all_contrast_train, self.all_contrast_val = random_split(
@@ -28,14 +29,17 @@ class AllContrastDataModule(pl.LightningDataModule):
         return DataLoader(
                 self.all_contrast_train, 
                 batch_size=self.batch_size, 
-                num_workers=self.num_workers
+                num_workers=self.num_workers, 
+                pin_memory=True,
+                shuffle=True
                 )
 
     def val_dataloader(self):
         return DataLoader(
                 self.all_contrast_val, 
                 batch_size=self.batch_size, 
-                num_workers=self.num_workers
+                num_workers=self.num_workers, 
+                pin_memory=True
                 )
 
 class NormalizeKSpace(object):
