@@ -26,8 +26,8 @@ def main(args):
     trainer = pl.Trainer(
             default_root_dir='cmrxrecon/dl/model_weights/',
             max_epochs=50, 
-            #limit_train_batches=10, 
-            #limit_val_batches=10,
+            limit_train_batches=50, 
+            limit_val_batches=2,
             logger=wandb_logger
             )
     trainer.fit(model=model, datamodule=data_module)

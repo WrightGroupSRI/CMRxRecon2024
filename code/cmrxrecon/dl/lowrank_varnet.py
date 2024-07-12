@@ -31,34 +31,34 @@ class LowRankLightning(LightningModule):
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
 
-        self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True)
+        self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True)
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
                 # imgs [b, t, h, w]
                 imgs = self.rss(fs_estimate)
                 grid = self.prepare_images(imgs)
-                self.logger.experiment.log({"train/estimate_images": [wandb.Image(grid, caption="Validation Images")]})
+                self.logger.log_image({"train/estimate_images": [wandb.Image(grid, caption="Validation Images")]})
 
                 sense_maps = self.model.sens_model(undersampled, undersampled != 0)
                 # [b, t, s, h, w]
                 sense_maps = sense_maps[:, 0, :, :, :]
-                grid = self.prepare_images(sense_maps.abs())
-                self.logger.experiment.log({"train/sense_maps": [wandb.Image(grid, caption="sense")]})
+                imgs = imgs[0, :, :, :].unsqueeze(1)
+
+                grid = make_grid(imgs.abs()/imgs.abs().max()).clip(0, 1)
+                self.logger.log_image({"train/sense_maps": [wandb.Image(grid, caption="sense")]})
 
                 imgs = self.rss(fully_sampled)
                 grid = self.prepare_images(imgs)
-                self.logger.experiment.log({"train/gt_images": [wandb.Image(grid, caption="Validation Ground Truth Images")]})
+                self.logger.log_image({"train/gt_images": [wandb.Image(grid, caption="Validation Ground Truth Images")]})
 
                 masked_k = self.model.get_center_masked_k_space(undersampled) 
                 masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2)
                 temporal_basis, spatial_basis = self.model.get_singular_vectors(masked_k)
 
                 grid = self.prepare_images(spatial_basis.abs())
-                self.logger.experiment.log({"train/spatial_components": [wandb.Image(grid, caption="Spatial singular vectors")]})
+                self.logger.log_image({"train/spatial_components": [wandb.Image(grid, caption="Spatial singular vectors")]})
 
-                print(temporal_basis[0].permute(1, 0).shape)
-                print(temporal_basis[0].permute(1, 0).abs().tolist())
                 self.logger.experiment.log({"train/time_components": wandb.plot.line_series(
                                                 xs=torch.arange(temporal_basis.shape[1]).tolist(),
                                                 ys=temporal_basis[0].permute(1, 0).abs().tolist(),
@@ -81,17 +81,17 @@ class LowRankLightning(LightningModule):
             # imgs [b, t, h, w]
             imgs = self.rss(fs_estimate)
             grid = self.prepare_images(imgs)
-            self.logger.experiment.log({"val/estimate_images": [wandb.Image(grid, caption="Validation Images")]})
+            self.logger.log_image({"val/estimate_images": [wandb.Image(grid, caption="Validation Images")]})
 
             sense_maps = self.model.sens_model(undersampled, undersampled != 0)
             # [b, t, s, h, w]
             sense_maps = sense_maps[:, 0, :, :, :]
             grid = self.prepare_images(sense_maps.abs())
-            self.logger.experiment.log({"val/sense_maps": [wandb.Image(grid, caption="sense")]})
+            self.logger.log_image({"val/sense_maps": [wandb.Image(grid, caption="sense")]})
 
             imgs = self.rss(fully_sampled)
             grid = self.prepare_images(imgs)
-            self.logger.experiment.log({"val/gt_images": [wandb.Image(grid, caption="Validation Ground Truth Images")]})
+            self.logger.log_image({"val/gt_images": [wandb.Image(grid, caption="Validation Ground Truth Images")]})
         return loss
 
 
