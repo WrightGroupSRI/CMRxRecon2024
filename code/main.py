@@ -77,6 +77,7 @@ def main(args):
                 output_dir = try_dir(os.path.join(args.predict_dir, "MultiCoil", mod, dataset, task))
 
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        sp_device = 0 if torch.cuda.is_available() else "cpu"
 
         for pt in glob.glob(os.path.join(data_dir, sample, "P*")):
 
@@ -138,7 +139,6 @@ def main(args):
                                 fname = f"{prefix}_kus_kt{SamplingR}"
 
                             dest_path = os.path.join(pt_dir_output, fname)
-
                             writecfl(dest_path, img)
                             # fix naming conventions
                             writemat(key="img4ranking", data=img, path=dest_path)
@@ -152,12 +152,16 @@ def main(args):
                         masked_kspace = kspace
 
                         img = recon_func(kspace=masked_kspace, mask=mask)
+                        maps = cxr.calc_smaps(kspace=masked_kspace, mask=mask, device=sp_device) 
 
                         fname = mat_file.split("/")[-1].split(".mat")[0]
+                        fname_maps = fname + "MAPS"
 
                         dest_path = os.path.join(pt_dir_output, fname)
+                        maps_path = os.path.join(pt_dir_output, fname_maps)
 
                         writecfl(dest_path, img)
+                        writecfl(maps_path, maps)
                         # fix naming conventions
                         writemat(key="img4ranking", data=img, path=dest_path)
 

@@ -1,13 +1,12 @@
 # Copy to Dockerfile
 
 # Specify the base image
-FROM pytorch/pytorch
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-devel
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/Toronto
 
-RUN apt-get update
+RUN apt update
 
-# Install BART with Cuda (Based on Kelvin Chow Python-ISMRMRD Server)
 RUN mkdir -p /opt/code
 
 # install python
@@ -19,7 +18,10 @@ VOLUME /output
 
 # install dependencies from requirements.txt
 COPY code/requirements.txt /
+
 RUN pip install -r /requirements.txt
+
+RUN python3 -m cupyx.tools.install_library --library nccl --cuda 12.x
 
 # Copy the code directory to /app
 COPY code /app

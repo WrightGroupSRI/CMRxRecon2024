@@ -3,3 +3,4 @@ torch
 h5py
 hdf5storage
 sigpy
+cupy-cuda12x

@@ -12,8 +12,8 @@
 
 import numpy as np
 
-#import sigpy as sp
-#import sigpy.mri as mr
+import sigpy as sp
+import sigpy.mri as mr
 
 def zf_recon(kspace=None, mask=None, device=None):
 
@@ -28,9 +28,18 @@ def zf_recon(kspace=None, mask=None, device=None):
 
     return np.sum(np.abs(sp.ifft(kspace, axes=(-1, -2)))**2, axis=coil_ax)**0.5
 
+def calc_smaps(kspace=None, mask=None, device=None):
 
-def sense_recon(kspace=None, mask=None, device=None):
-    pass
+    sht, shz, shc, shy, shx = kspace.shape
 
-def espirit_recon(kspace=None, mask=None):
-    pass
+    maps = np.zeros((shz, shc, shy, shx), dtype=np.complex_)
+
+    for z in range(shz):
+
+        ksp = kspace[0, z, ...]
+
+        maps[z, ...] = mr.app.EspiritCalib(ksp, device=device, calib_width=16).run().get()
+
+    return maps
+
+
