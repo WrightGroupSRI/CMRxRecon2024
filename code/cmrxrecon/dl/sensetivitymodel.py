@@ -27,10 +27,10 @@ class SensetivityModel(nn.Module):
     def forward(self, images, mask):
         assert not torch.isnan(images).any()
         if self.mask_center:
-            images = self.mask(images, mask) 
+            images = images[:, [0], :, :, :]
+            images = self.mask(images, images != 0) 
         assert not torch.isnan(images).any()
         # get the first image for estimating coil sensetivites
-        images = images[:, [0], :, :, :]
 
         images = ifft_2d_img(images, axes=[-1, -2])
 

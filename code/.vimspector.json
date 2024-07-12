@@ -190,10 +190,10 @@
                 }
             }
         },
-        "Debug ssl": {
+        "Debug train": {
             "adapter": "debugpy",
             "configuration": {
-                "name": "Debug Tests",
+                "name": "debug train",
                 "type": "python",
                 "request": "launch",
                 "program": "train.py",
@@ -202,6 +202,7 @@
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
                 "args": [
+                    "--batch_size", "2"
                 ]
             },
             "breakpoints": {

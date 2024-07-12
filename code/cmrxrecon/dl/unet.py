@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl 
-from cmrxrecon.utils import root_sum_of_squares
+from cmrxrecon.utils import root_sum_of_squares, ifft_2d_img
 
 class UnetLightning(pl.LightningModule):
     def __init__(self, input_channels: int, depth:int = 4, chan:int = 18):
@@ -18,8 +18,8 @@ class UnetLightning(pl.LightningModule):
         undersampled, fully_sampled = batch
 
         y, x = undersampled.shape[-2], undersampled.shape[-1]
-        aliased = root_sum_of_squares(undersampled, coil_dim=2).reshape(-1, 1, y, x)
-        fully_sampled = root_sum_of_squares(fully_sampled, coil_dim=2).reshape(-1, 1, y, x)
+        aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
+        fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fs_estimate = self.model(aliased)
         
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
@@ -29,8 +29,8 @@ class UnetLightning(pl.LightningModule):
         undersampled, fully_sampled = batch
 
         y, x = undersampled.shape[-2], undersampled.shape[-1]
-        aliased = root_sum_of_squares(undersampled, coil_dim=2).reshape(-1, 1, y, x)
-        fully_sampled = root_sum_of_squares(fully_sampled, coil_dim=2).reshape(-1, 1, y, x)
+        aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
+        fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fs_estimate = self.model(aliased)
 
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)

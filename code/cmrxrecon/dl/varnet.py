@@ -13,33 +13,55 @@ import einops
 
 
 class VarNetLightning(LightningModule):
-    def __init__(self, input_channels: int, cascades:int = 5, unet_chans:int = 18):
+    def __init__(self, input_channels: int, cascades:int=4, unet_chans:int=18):
         super().__init__()
 
         self.model = VarNet(input_channels, cascades = cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))
+        self.automatic_optimization = False
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_index: int): 
         # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
+        opt = self.optimizers()
+        opt.zero_grad()
+         
+        split_undersampled = torch.split(undersampled, 3, dim=1)
+        fully_sampled_split = torch.split(fully_sampled, 3, dim=1)
 
-        undersampled = undersampled.permute((1, 0, 2, 3, 4))
-        fs_estimate = self.model(undersampled, undersampled != 0)
-        fs_estimate = fs_estimate.permute((1, 0, 2, 3, 4))
-        
-        loss = self.loss_fn(fully_sampled, fs_estimate)
-        return loss
+        loss_arr = []
+        fs_estimates = []
+        for under, fs in zip(split_undersampled, fully_sampled_split):
+            b, t, c, h, w = under.shape
+
+            under = under.reshape(b*t, 1, c, h, w)
+            fs_estimate = self.model(under, under != 0)
+            fs_estimate = fs_estimate.reshape(b, t, c, h, w)
+
+            loss = self.loss_fn(fs, fs_estimate)
+            self.manual_backward(loss)
+
+            fs_estimates.append(fs_estimate)
+            loss_arr.append(loss)
+
+        opt.step() 
+        ave_loss = sum(loss_arr)/len(loss_arr)
+        self.log('train/loss', ave_loss, prog_bar=True, on_step=True)
+        return ave_loss 
 
 
     def validation_step(self, batch, batch_index): 
         # datashape [b, t, h, w]
         undersampled, fully_sampled = batch
 
-        undersampled = undersampled.permute((1, 0, 2, 3, 4))
+        b, t, c, h, w = undersampled.shape
+
+        undersampled = undersampled.reshape(b*t, 1, c, h, w)
         fs_estimate = self.model(undersampled, undersampled != 0)
-        fs_estimate = fs_estimate.permute((1, 0, 2, 3, 4))
-        
+        fs_estimate = fs_estimate.reshape(b, t, c, h, w)
+
         loss = self.loss_fn(fully_sampled, fs_estimate)
+        self.log('val/loss', loss, prog_bar=True, on_epoch=True)
         return loss
 
 

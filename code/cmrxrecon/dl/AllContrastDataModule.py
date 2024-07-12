@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
 import torch 
 from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
+from torchvision.transforms import Compose
 
 
 
@@ -17,7 +18,7 @@ class AllContrastDataModule(pl.LightningDataModule):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
-                transforms=NormalizeKSpace(),
+                transforms=Compose([NormalizeKSpace()]),
                 task_one=False
                 )
 
@@ -31,7 +32,8 @@ class AllContrastDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers, 
                 pin_memory=True,
-                shuffle=True
+                shuffle=True,
+                collate_fn=collate_fn
                 )
 
     def val_dataloader(self):
@@ -39,14 +41,25 @@ class AllContrastDataModule(pl.LightningDataModule):
                 self.all_contrast_val, 
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers, 
-                pin_memory=True
+                pin_memory=True,
+                collate_fn=collate_fn
                 )
+
+
+def pad_to_max_time(data:torch.Tensor, max_time:int):
+    return torch.nn.functional.pad(data, (0, 0, 0, 0, 0, 0, 0, max_time - data.shape[0]))
+
+def collate_fn(batch):
+    max_time = max([x.shape[0] for x, _ in batch])
+    us = [pad_to_max_time(x, max_time) for x, _ in batch]
+    fs = [pad_to_max_time(x, max_time) for _, x in batch]
+    return (torch.stack(us), torch.stack(fs))
 
 class NormalizeKSpace(object):
     """Normalize k space to 1 for each slice 
     """
 
-    def __call__(self, sample):
+    def __call__(self, sample:torch.Tensor):
         # dimensions [t, h, w]
         under, fully_sampled = sample
         return under/under.abs().amax((-1, -2), keepdim=True), fully_sampled/under.abs().amax((-1, -2), keepdim=True)

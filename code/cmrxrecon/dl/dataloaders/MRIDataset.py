@@ -11,7 +11,7 @@ from dataclasses import dataclass
 @dataclass
 class PatientFiles:
     fully_sampled: str
-    mask: str
+    mask: list[str]
     slices: int
 
 class MRIDataset(Dataset):
@@ -102,10 +102,9 @@ class MRIDataset(Dataset):
                 else: 
                     slices = fr['kus'].shape[0]
         
-            for file in mask_files:
-                self.file_list.append(
-                    PatientFiles(fully_sampled=fs_file, mask=file, slices=slices)
-                    )
+            self.file_list.append(
+                PatientFiles(fully_sampled=fs_file, mask=mask_files, slices=slices)
+                )
                 
         print(f'Found {sum(patient.slices for patient in self.file_list)} slices!')
     
@@ -119,7 +118,8 @@ class MRIDataset(Dataset):
         subject_files = self.file_list[vol_idx]
 
         fs_file = subject_files.fully_sampled
-        mask_file = subject_files.mask
+        index = torch.randint(len(subject_files.mask), size=(1,))
+        mask_file = subject_files.mask[index]
 
         k_space = None
         mask = None
@@ -138,7 +138,7 @@ class MRIDataset(Dataset):
         k_space = k_space['real'] + 1j * k_space['imag']
 
         mask = np.expand_dims(mask, 1)
-        training_sample = (torch.from_numpy(k_space), torch.from_numpy(k_space*mask))
+        training_sample = (torch.from_numpy(k_space*mask), torch.from_numpy(k_space))
 
         if self.transforms: 
             training_sample = self.transforms(training_sample)
