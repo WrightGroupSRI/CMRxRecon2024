@@ -18,7 +18,7 @@ class AllContrastDataModule(pl.LightningDataModule):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
-                transforms=Compose([NormalizeKSpace()]),
+                transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]),
                 task_one=False
                 )
 

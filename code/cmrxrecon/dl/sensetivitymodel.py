@@ -15,32 +15,26 @@ class SensetivityModel(nn.Module):
             out_chans: int, 
             chans: int, 
             mask_center: bool = True, 
-            batch_contrasts: bool = False,
             ):
         
         super().__init__()
-        self.batch_contrasts = batch_contrasts
         self.model = Unet(in_chans, out_chans, chans=chans)
         self.mask_center = mask_center
 
     # recieve coil maps as [B, contrast, channels, H, W]
     def forward(self, images, mask):
         assert not torch.isnan(images).any()
-        if self.mask_center:
-            images = images[:, [0], :, :, :]
-            images = self.mask(images, images != 0) 
+        images = images[:, [0], :, :, :]
+        images = self.mask(images, images != 0) 
         assert not torch.isnan(images).any()
         # get the first image for estimating coil sensetivites
 
         images = ifft_2d_img(images, axes=[-1, -2])
 
         number_of_coils = images.shape[2]
-        num_contrasts = images.shape[1]
+        n_time = images.shape[1]
 
-        if self.batch_contrasts:
-            images = einops.rearrange(images, 'b contrast c h w -> (b c) contrast h w')
-        else:
-            images = einops.rearrange(images, 'b contrast c h w -> (b contrast c) 1 h w')
+        images = einops.rearrange(images, 'b t c h w -> (b t c) 1 h w')
         assert isinstance(images, torch.Tensor)
 
         # convert to real numbers [b * contrast * coils, cmplx, h, w]
@@ -56,10 +50,7 @@ class SensetivityModel(nn.Module):
         # convert back to complex
         images = real_to_complex(images)
         # rearange back to original format
-        if self.batch_contrasts:
-            images = einops.rearrange(images, '(b c) contrast h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
-        else:
-            images = einops.rearrange(images, '(b contrast c) 1 h w -> b contrast c h w', c=number_of_coils, contrast=num_contrasts)
+        images = einops.rearrange(images, '(b t c) 1 h w -> b t c h w', c=number_of_coils, t=n_time)
         # rss to normalize sense maps
         rss_norm = root_sum_of_squares(images, coil_dim=2).unsqueeze(2) + 1e-9
         #assert not (rss_norm == 0).any()
@@ -68,49 +59,14 @@ class SensetivityModel(nn.Module):
 
     def mask(self, coil_k_spaces, center_mask):
         # coil_k: [b cont chan height width]
-        masked_k_space = coil_k_spaces.clone()
         center_x = center_mask.shape[-1] // 2
         center_y = center_mask.shape[-2] // 2
+
+        mask = torch.zeros_like(coil_k_spaces, dtype=torch.bool)
+        mask[:, :, :, center_y-8:center_y+8, center_x-8:center_x+8] = 1
         
-        # Get the squezed masks in vertical and horizontal directions (batch, contrast, PE or FE)
-        squeezed_mask_hor = (center_mask[:, :, 0, center_y, :] > 0.75).to(torch.int8)
-        squeezed_mask_vert = (center_mask[:, :, 0, :, center_x] > 0.75).to(torch.int8)
+        return coil_k_spaces * mask 
 
-        assert (squeezed_mask_hor == True).any(dim=-1).all(), "The squeeze mask is all zero! Can't estimate coil sensetivities"
-        assert (squeezed_mask_vert == True).any(dim=-1).all(), "The squeeze mask is all zero! Can't estimate coil sensetivities"
-        # Get the first zero index starting from the center. (TODO: This is a problem if they are all zeros or ones...)
-        left = torch.argmin(squeezed_mask_hor[..., :center_x].flip(-1), dim=-1)
-        right = torch.argmin(squeezed_mask_hor[..., center_x:], dim=-1)
-        top = torch.argmin(squeezed_mask_vert[..., :center_y].flip(-1), dim=-1)
-        bottom = torch.argmin(squeezed_mask_vert[..., center_y:], dim=-1)
-
-        if (squeezed_mask_hor == 1).all():
-            left = torch.full(left.shape, 5)
-            right = torch.full(right.shape, 5)
-
-        left[left == 0] =  5
-        right[right == 0] = 5
-        top[top == 0] = 5
-        bottom[bottom== 0] = 5
-        assert (left != 0).any(), 'Left mask bounds should have at least one 0'
-        assert (right != 0).any(), 'Right mask bounds should have at least one 0!'
-
-        if (squeezed_mask_vert == 1).all():
-            top = torch.full(top.shape, center_y)
-            bottom = torch.full(top.shape, center_y)
-
-        # force symmetric left and right acs boundries
-        low_freq_x = torch.min(left, right)
-        low_freq_y = torch.min(top, bottom)
-
-        center_mask = torch.zeros_like(masked_k_space, dtype=torch.bool)
-        # loop through num_low freq tensor and set acs lines to true
-        for i in range(low_freq_x.shape[0]):
-            for j in range(low_freq_y.shape[1]):
-                center_mask[i, j, :, center_y - low_freq_y[i, j]:center_y + low_freq_y[i, j], center_x-low_freq_x[i, j]:center_x + low_freq_x[i, j]] = True
-
-        assert not center_mask.isnan().any()
-        return masked_k_space * center_mask
 
     def norm(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # group norm
