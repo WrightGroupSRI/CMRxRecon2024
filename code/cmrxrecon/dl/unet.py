@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl 
 from cmrxrecon.utils import root_sum_of_squares, ifft_2d_img
+from cmrxrecon.metrics import metrics
 
 class UnetLightning(pl.LightningModule):
     def __init__(self, input_channels: int, depth:int = 4, chan:int = 18):
@@ -32,9 +33,34 @@ class UnetLightning(pl.LightningModule):
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fs_estimate = self.model(aliased)
-
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
-        return loss
+
+        ssim = metrics.calculate_ssim(fully_sampled, fs_estimate, self.device)
+        nmse = metrics.calculate_nmse(fully_sampled, fs_estimate)
+        psnr = metrics.calculate_psnr(fully_sampled, fs_estimate, self.device)
+
+        self.log_dict(
+                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
+                on_epoch=True, prog_bar=True, logger=True
+                )
+
+        return {
+                'loss': loss, 
+                'ssim': ssim, 
+                'psnr': psnr, 
+                'nmse': nmse
+                }
+    
+
+    def test_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
+        metrics_dict = self.validation_step(batch, batch_index)
+
+        self.log_dict(
+                {'test/loss': metrics_dict['loss'], 'val/ssim': metrics_dict['ssim'], 'val/psnr': metrics_dict['psnr'], 'val/nmse': metrics_dict['nmse']},
+                on_epoch=True, prog_bar=True, logger=True
+                )
+        return metrics_dict
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

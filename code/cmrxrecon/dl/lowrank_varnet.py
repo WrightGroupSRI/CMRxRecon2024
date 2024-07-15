@@ -8,8 +8,9 @@ from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.resnet import ResNet
 from cmrxrecon.dl.sensetivitymodel import SensetivityModel
 from cmrxrecon.utils import complex_to_real
+from cmrxrecon.metrics import metrics
 from torch.fft import ifftshift, fftshift, fft2, ifft2
-from pytorch_lightning import LightningModule
+import pytorch_lightning as pl 
 import matplotlib.pyplot as plt
 import einops
 from torchvision.utils import make_grid
@@ -17,7 +18,7 @@ from torchvision.transforms import ToPILImage
 
 
 
-class LowRankLightning(LightningModule):
+class LowRankLightning(pl.LightningModule):
     def __init__(self, cascades:int = 5, unet_chans:int = 18, lr=1e-3):
         super().__init__()
         self.lr = lr
@@ -33,6 +34,7 @@ class LowRankLightning(LightningModule):
 
         self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True)
         
+        print(self.logger)
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
                 # imgs [b, t, h, w]
@@ -64,7 +66,8 @@ class LowRankLightning(LightningModule):
                 grid = self.prepare_images(spatial_basis.abs())
                 self.logger.log_image("train/spatial_components", [wandb.Image(grid, caption="Spatial singular vectors")])
 
-                self.logger.experiment.log({"train/time_components": wandb.plot.line_series(
+                if isinstance(self.logger, pl.loggers.WandbLogger):
+                    self.logger.experiment.log({"train/time_components": wandb.plot.line_series(
                                                 xs=torch.arange(temporal_basis.shape[1]).tolist(),
                                                 ys=temporal_basis[0].permute(1, 0).abs().tolist(),
                                                 keys=['component1', 'component2', 'component3']
@@ -80,26 +83,55 @@ class LowRankLightning(LightningModule):
         fs_estimate = self.model(undersampled, undersampled != 0)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
+        estimate_images = self.rss(fs_estimate)
+        ground_truth_images = self.rss(fully_sampled)
 
-        self.log('val/loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
+        nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
+        psnr = metrics.calculate_psnr(ground_truth_images, estimate_images, self.device)
+
+        self.log_dict(
+                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
+                on_epoch=True, prog_bar=True, logger=True
+                )
         if batch_index == 0:  # Log only for the first batch in each epoch
             # imgs [b, t, h, w]
-            imgs = self.rss(fs_estimate)
-            grid = self.prepare_images(imgs)
+            grid = self.prepare_images(estimate_images)
             self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
 
-            sense_maps = self.model.sens_model(undersampled, undersampled != 0)
-            # [b, t, s, h, w]
-            sense_maps = sense_maps[:, 0, :, :, :]
-            sense_maps = sense_maps[0, :, :, :].unsqueeze(1)
-
-            grid = make_grid(sense_maps.abs()/sense_maps.abs().max()).clip(0, 1)
-            self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
-
-            imgs = self.rss(fully_sampled)
-            grid = self.prepare_images(imgs)
+            grid = self.prepare_images(ground_truth_images)
             self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
-        return loss
+
+        return {
+                'loss': loss, 
+                'ssim': ssim, 
+                'psnr': psnr
+                }
+
+    def test_step(self, batch, batch_index): 
+        undersampled, fully_sampled = batch
+
+        fs_estimate = self.model(undersampled, undersampled != 0)
+        
+        loss = self.loss_fn(fully_sampled, fs_estimate)
+        estimate_images = self.rss(fs_estimate)
+        ground_truth_images = self.rss(fully_sampled)
+
+        ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
+        nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
+        psnr = metrics.calculate_psnr(ground_truth_images, estimate_images, self.device)
+
+        self.log_dict(
+                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
+                on_epoch=True, prog_bar=True, logger=True
+                )
+
+        return {
+                'loss': loss, 
+                'ssim': ssim, 
+                'psnr': psnr
+                }
+
 
 
     def configure_optimizers(self):

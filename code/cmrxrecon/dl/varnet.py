@@ -5,7 +5,8 @@ from functools import partial
 
 from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.sensetivitymodel import SensetivityModel
-from cmrxrecon.utils import complex_to_real, root_sum_of_squares, ifft_2d_img
+from cmrxrecon.utils import complex_to_real, root_sum_of_squares, ifft_2d_img, fft_2d_img
+from cmrxrecon.metrics import metrics
 from torch.fft import ifftshift, fftshift, fft2, ifft2
 from pytorch_lightning import LightningModule
 import einops
@@ -61,22 +62,37 @@ class VarNetLightning(LightningModule):
         fs_estimate = fs_estimate.reshape(b, t, c, h, w)
 
         loss = self.loss_fn(fully_sampled, fs_estimate)
+
+        fs_estimate = root_sum_of_squares(ifft_2d_img(fs_estimate), coil_dim=2)
+        fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled), coil_dim=2)
+
         self.log('val/loss', loss, prog_bar=True, on_epoch=True)
-        return loss
 
-    def test_step(self, batch, batch_index): 
-        # datashape [b, t, h, w]
-        undersampled, fully_sampled = batch
+        ssim = metrics.calculate_ssim(fully_sampled, fs_estimate, self.device)
+        nmse = metrics.calculate_nmse(fully_sampled, fs_estimate)
+        psnr = metrics.calculate_psnr(fully_sampled, fs_estimate, self.device)
 
-        b, t, c, h, w = undersampled.shape
+        self.log_dict(
+                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
+                on_epoch=True, prog_bar=True, logger=True
+                )
 
-        undersampled = undersampled.reshape(b*t, 1, c, h, w)
-        fs_estimate = self.model(undersampled, undersampled != 0)
-        fs_estimate = fs_estimate.reshape(b, t, c, h, w)
+        return {
+                'loss': loss, 
+                'ssim': ssim, 
+                'psnr': psnr, 
+                'nmse': nmse
+                }
 
-        loss = self.loss_fn(fully_sampled, fs_estimate)
-        self.log('test/loss', loss, prog_bar=True, on_epoch=True)
-        return loss
+
+    def test_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
+        metrics_dict = self.validation_step(batch, batch_index)
+
+        self.log_dict(
+                {'test/loss': metrics_dict['loss'], 'val/ssim': metrics_dict['ssim'], 'val/psnr': metrics_dict['psnr'], 'val/nmse': metrics_dict['nmse']},
+                on_epoch=True, prog_bar=True, logger=True
+                )
+        return metrics_dict
 
 
     def configure_optimizers(self):
@@ -191,5 +207,3 @@ def real_to_complex(images: torch.Tensor):
     images = torch.view_as_complex(images)
     return images
 
-fft_2d_img = lambda x, axes: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes), dim=axes)
-ifft_2d_img = lambda x, axes: ifftshift(fft2(fftshift(x, dim=axes), dim=axes), dim=axes)

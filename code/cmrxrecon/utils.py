@@ -19,5 +19,5 @@ def real_to_complex(images: torch.Tensor):
 def root_sum_of_squares(data: torch.Tensor, coil_dim=0):
     return torch.sqrt(data.abs().pow(2).sum(coil_dim) + 1e-6)
 
-fft_2d_img = lambda x, axes: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes), dim=axes)
-ifft_2d_img = lambda x, axes: ifftshift(fft2(fftshift(x, dim=axes), dim=axes), dim=axes)
+fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes), dim=axes)
+ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes), dim=axes)

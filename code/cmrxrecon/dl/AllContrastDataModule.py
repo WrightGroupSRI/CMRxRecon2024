@@ -14,7 +14,7 @@ class AllContrastDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def setup(self, stage: str):
+    def prepare_data(self):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
@@ -22,9 +22,11 @@ class AllContrastDataModule(pl.LightningDataModule):
                 task_one=False
                 )
 
-        self.all_contrast_train, self.all_contrast_val = random_split(
-            all_contrast_full, [0.9, 0.1], generator=torch.Generator().manual_seed(42)
+        self.all_contrast_train, self.all_contrast_val, self.all_contrast_test = random_split(
+            all_contrast_full, [0.8, 0.1, 0.1], generator=torch.Generator().manual_seed(42)
         )
+
+
 
     def train_dataloader(self):
         return DataLoader(
@@ -39,6 +41,15 @@ class AllContrastDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(
                 self.all_contrast_val, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers, 
+                pin_memory=True,
+                collate_fn=collate_fn
+                )
+
+    def test_dataloader(self):
+        return DataLoader(
+                self.all_contrast_test, 
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers, 
                 pin_memory=True,

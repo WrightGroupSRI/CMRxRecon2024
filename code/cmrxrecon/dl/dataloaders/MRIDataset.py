@@ -25,7 +25,8 @@ class MRIDataset(Dataset):
             train: bool = True, 
             acceleration_factor: Literal['4', '8', '10'] = '4',
             file_prefix: str = 'cine_lax',
-            transforms: Optional[Callable] = None
+            transforms: Optional[Callable] = None,
+            all_data: bool = False, 
             ):
         """
         Initalize a contrast dataset based on parameters
@@ -101,8 +102,13 @@ class MRIDataset(Dataset):
                     slices = (fr['kspace_full'].shape[0])
                 else: 
                     slices = fr['kus'].shape[0]
-        
-            self.file_list.append(
+            if all_data:  
+                for mask in mask_files: 
+                    self.file_list.append(
+                            PatientFiles(fully_sampled=fs_file, mask=[mask], slices=slices)
+                            )
+            else:
+                self.file_list.append(
                 PatientFiles(fully_sampled=fs_file, mask=mask_files, slices=slices)
                 )
                 

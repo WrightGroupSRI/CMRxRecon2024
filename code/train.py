@@ -26,11 +26,11 @@ def main(args):
     trainer = pl.Trainer(
             default_root_dir='cmrxrecon/dl/model_weights/',
             max_epochs=50, 
-            logger=wandb_logger
+            logger=wandb_logger,
             )
-    trainer.fit(model=model, datamodule=data_module)
 
-    #trainer.test(model=model, datamodule=data_module)
+    trainer.fit(model=model, datamodule=data_module)
+    trainer.test(model=model, datamodule=data_module)
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser()
