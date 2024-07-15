@@ -2,7 +2,7 @@
 #SBATCH --cpus-per-task=3
 #SBATCH --gpus-per-node=2
 #SBATCH --nodes=1
-#SBATCH --ntasks=2
+#SBATCH --ntasks-per-node=2
 #SBATCH --mem=20000M 
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
@@ -29,4 +29,4 @@ wandb offline
 
 srun python train.py \
     --num_workers 3 \
-    --models lowrank
+    --model lowrank

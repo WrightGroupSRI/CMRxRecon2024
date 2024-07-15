@@ -12,8 +12,8 @@
 
 import numpy as np
 
-import sigpy as sp
-import sigpy.mri as mr
+#import sigpy as sp
+#import sigpy.mri as mr
 
 def zf_recon(kspace=None, mask=None, device=None):
 

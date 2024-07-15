@@ -130,9 +130,9 @@ class LowRankModl(nn.Module):
         
         # populate cascade with model backbone
         spatial_denoiser = partial(Unet, 2, 2, chans=unet_chans)
-        temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans, dimension='1d')
+        #temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans, dimension='1d')
         self.cascades = nn.ModuleList(
-            [model_step(spatial_denoiser(), temporal_denoiser()) for _ in range(cascades)]
+            [model_step(spatial_denoiser(), None) for _ in range(cascades)]
         )
 
         # model to estimate sensetivities

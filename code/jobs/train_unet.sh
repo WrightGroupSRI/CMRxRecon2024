@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=3
-#SBATCH --gpus-per-node=4
+#SBATCH --gpus-per-node=t4:4
+#SBATCH --ntasks-per-node=4
 #SBATCH --nodes=1
 #SBATCH --mem=20000M 
 #SBATCH --account=def-mchiew
@@ -23,4 +24,4 @@ wandb offline
 
 srun python train.py \
     --num_workers 3 \
-    --models unet
+    --model unet

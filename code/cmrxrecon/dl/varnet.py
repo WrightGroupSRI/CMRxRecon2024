@@ -5,7 +5,7 @@ from functools import partial
 
 from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.sensetivitymodel import SensetivityModel
-from cmrxrecon.utils import complex_to_real
+from cmrxrecon.utils import complex_to_real, root_sum_of_squares, ifft_2d_img
 from torch.fft import ifftshift, fftshift, fft2, ifft2
 from pytorch_lightning import LightningModule
 import einops
@@ -62,6 +62,20 @@ class VarNetLightning(LightningModule):
 
         loss = self.loss_fn(fully_sampled, fs_estimate)
         self.log('val/loss', loss, prog_bar=True, on_epoch=True)
+        return loss
+
+    def test_step(self, batch, batch_index): 
+        # datashape [b, t, h, w]
+        undersampled, fully_sampled = batch
+
+        b, t, c, h, w = undersampled.shape
+
+        undersampled = undersampled.reshape(b*t, 1, c, h, w)
+        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = fs_estimate.reshape(b, t, c, h, w)
+
+        loss = self.loss_fn(fully_sampled, fs_estimate)
+        self.log('test/loss', loss, prog_bar=True, on_epoch=True)
         return loss
 
 
