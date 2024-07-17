@@ -14,7 +14,7 @@ class AllContrastDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def prepare_data(self):
+    def setup(self, stage):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,

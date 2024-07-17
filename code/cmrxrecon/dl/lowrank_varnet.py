@@ -34,7 +34,6 @@ class LowRankLightning(pl.LightningModule):
 
         self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True)
         
-        print(self.logger)
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
                 # imgs [b, t, h, w]
@@ -66,7 +65,7 @@ class LowRankLightning(pl.LightningModule):
                 grid = self.prepare_images(spatial_basis.abs())
                 self.logger.log_image("train/spatial_components", [wandb.Image(grid, caption="Spatial singular vectors")])
 
-                if isinstance(self.logger, pl.loggers.WandbLogger):
+                if isinstance(self.logger, pl.loggers.WandbLogger) and self.global_rank == 0:
                     self.logger.experiment.log({"train/time_components": wandb.plot.line_series(
                                                 xs=torch.arange(temporal_basis.shape[1]).tolist(),
                                                 ys=temporal_basis[0].permute(1, 0).abs().tolist(),
