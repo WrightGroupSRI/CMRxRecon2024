@@ -25,8 +25,9 @@ def main(args):
 
     trainer = pl.Trainer(
             default_root_dir='cmrxrecon/dl/model_weights/',
-            max_epochs=50, 
+            max_epochs=args.max_epochs, 
             logger=wandb_logger,
+            limit_train_batches=args.limit_batches
             )
 
     trainer.fit(model=model, datamodule=data_module)
@@ -41,6 +42,8 @@ if __name__ == '__main__':
     parser.add_argument('--run_name', type=str)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--model', type=str, default='varnet')
+    parser.add_argument('--max_epochs', type=int, default=50)
+    parser.add_argument('--limit_batches', type=float, default=1.0)
 
     args = parser.parse_args()
     main(args)

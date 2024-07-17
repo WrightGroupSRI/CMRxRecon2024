@@ -41,7 +41,7 @@ class UnetLightning(pl.LightningModule):
 
         self.log_dict(
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
-                on_epoch=True, prog_bar=True, logger=True
+                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
                 )
 
         return {
@@ -57,7 +57,7 @@ class UnetLightning(pl.LightningModule):
 
         self.log_dict(
                 {'test/loss': metrics_dict['loss'], 'val/ssim': metrics_dict['ssim'], 'val/psnr': metrics_dict['psnr'], 'val/nmse': metrics_dict['nmse']},
-                on_epoch=True, prog_bar=True, logger=True
+                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
                 )
         return metrics_dict
 

@@ -32,7 +32,7 @@ class LowRankLightning(pl.LightningModule):
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
 
-        self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True)
+        self.log('train/loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
@@ -91,7 +91,7 @@ class LowRankLightning(pl.LightningModule):
 
         self.log_dict(
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
-                on_epoch=True, prog_bar=True, logger=True
+                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
                 )
         if batch_index == 0:  # Log only for the first batch in each epoch
             # imgs [b, t, h, w]
@@ -122,7 +122,7 @@ class LowRankLightning(pl.LightningModule):
 
         self.log_dict(
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
-                on_epoch=True, prog_bar=True, logger=True
+                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
                 )
 
         return {

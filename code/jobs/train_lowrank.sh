@@ -20,13 +20,12 @@ module load python/3.11
 virtualenv --no-download $SLURM_TMPDIR/env
 source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip 
-pip install --no-index -r ./requirements2.txt
+pip install --no-index -r /home/kadotab/requirements2.txt
 
-cd ../
 
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
 wandb offline
 
-srun python train.py \
+srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
     --model lowrank
