@@ -27,7 +27,9 @@ def main(args):
             default_root_dir='cmrxrecon/dl/model_weights/',
             max_epochs=args.max_epochs, 
             logger=wandb_logger,
-            limit_train_batches=args.limit_batches
+            limit_train_batches=args.limit_batches,
+            limit_val_batches=args.limit_batches,
+            limit_test_batches=args.limit_batches
             )
 
     trainer.fit(model=model, datamodule=data_module)
