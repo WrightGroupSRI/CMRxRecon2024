@@ -4,6 +4,8 @@ from cmrxrecon.dl.unet import UnetLightning
 from cmrxrecon.dl.AllContrastDataModule import AllContrastDataModule
 from cmrxrecon.dl.SelfSupervsiedDataModule import SelfSupervisedDataModule
 import argparse
+from pytorch_lightning.callbacks import DeviceStatsMonitor
+
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
@@ -29,7 +31,8 @@ def main(args):
             logger=wandb_logger,
             limit_train_batches=args.limit_batches,
             limit_val_batches=args.limit_batches,
-            limit_test_batches=args.limit_batches
+            limit_test_batches=args.limit_batches,
+            callbacks=[DeviceStatsMonitor()]
             )
 
     trainer.fit(model=model, datamodule=data_module)

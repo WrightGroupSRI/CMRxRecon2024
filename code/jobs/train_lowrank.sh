@@ -1,12 +1,14 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=3
-#SBATCH --gpus-per-node=2
+#SBATCH --gpus-per-node=t4:4
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
-#SBATCH --mem=20000M 
+#SBATCH --ntasks-per-node=4
+#SBATCH --mem-per-cpu=4G 
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=lowrank-%j.out
+#SBATCH --mail-user=brenden.kadota@gmail.com
+#SBATCH --mail-type=BEGIN,FAIL
 
 '
 cd to this file and run: sbatch train_lowrank.sh, not sure if this fully trains

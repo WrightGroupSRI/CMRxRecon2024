@@ -3,10 +3,12 @@
 #SBATCH --gpus-per-node=2
 #SBATCH --ntasks-per-node=2
 #SBATCH --nodes=1
-#SBATCH --mem=20000M 
+#SBATCH --mem-per-cpu=4G
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=varnet-%j.out
+#SBATCH --mail-user=brenden.kadota@gmail.com
+#SBATCH --mail-type=BEGIN,FAIL
 
 nvidia-smi
 
