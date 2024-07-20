@@ -12,6 +12,10 @@ RUN mkdir -p /opt/code
 # install python
 RUN apt-get install -y python3 python3-pip
 
+# install bart
+RUN apt-get install -y git cmake g++ libfftw3-dev liblapacke-dev libpng-dev gfortran
+RUN apt-get install -y bart-cuda
+
 # mount volumes
 VOLUME /input
 VOLUME /output
