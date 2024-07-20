@@ -18,4 +18,4 @@ from functools import partial
 itsense_recon = partial(bart_recon, command="pics -g -d5 -l2 -r 0.1")
 espirit_recon = partial(bart_recon, command="pics -g -d5 -R W:7:0:0.01")
 """
-from .sigpy_recon import zf_recon, calc_smaps
+from .sigpy_recon import zf_recon, calc_smaps, sense_recon, espirit_recon

@@ -25,6 +25,8 @@ from utils import *
 from cflutils import readcfl, writecfl
 import cmrxrecon as cxr
 
+from run4ranking import run4Ranking
+
 import argparse
 
 def main(args):
@@ -151,19 +153,14 @@ def main(args):
 
                         masked_kspace = kspace
 
-                        img = recon_func(kspace=masked_kspace, mask=mask)
-                        maps = cxr.calc_smaps(kspace=masked_kspace, mask=mask, device=sp_device) 
+                        img = recon_func(kspace=masked_kspace, mask=mask, sp_device=sp_device)
 
                         fname = mat_file.split("/")[-1].split(".mat")[0]
-                        fname_maps = fname + "MAPS"
-
                         dest_path = os.path.join(pt_dir_output, fname)
-                        maps_path = os.path.join(pt_dir_output, fname_maps)
 
-                        writecfl(dest_path, img)
-                        writecfl(maps_path, maps)
+                        writecfl(dest_path, run4Ranking(img, fname)) # debugging
                         # fix naming conventions
-                        writemat(key="img4ranking", data=img, path=dest_path)
+                        writemat(key="img4ranking", data=run4Ranking(img, fname), path=dest_path)
 
                 # break # mat file
 
