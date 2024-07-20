@@ -129,22 +129,27 @@ class MRIDataset(Dataset):
 
         k_space = None
         mask = None
-        with h5py.File(fs_file) as fr:
-            # DATA SHAPE [t, z, c, y, x]
-            if self.train:
-                k_space:np.ndarray = fr['kspace_full'][slice_idx, ...]
-            else:
-                k_space:np.ndarray = fr['kus'][slice_idx, ...]
+        try:
+            with h5py.File(fs_file) as fr:
+                # DATA SHAPE [t, z, c, y, x]
+                if self.train:
+                    k_space = (fr['kspace_full'][slice_idx])
+                else: 
+                    k_space = (fr['kus'][slice_idx])
 
-        with h5py.File(mask_file) as fr:
-            # DATA SHAPE [t, z, c, y, x]
-            mask:np.ndarray = fr['mask'][:]
+            with h5py.File(mask_file) as fr:
+                # DATA SHAPE [t, z, c, y, x]
+                mask:torch.Tensor = torch.as_tensor(fr['mask'][:])
+        except IOError:
+            print('error opening file')
 
-        mask = mask.astype(bool)
-        k_space = k_space['real'] + 1j * k_space['imag']
+
+        mask = mask.bool()
+
+        k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
 
         mask = np.expand_dims(mask, 1)
-        training_sample = (torch.from_numpy(k_space*mask), torch.from_numpy(k_space))
+        training_sample = (k_space*mask, k_space)
 
         if self.transforms: 
             training_sample = self.transforms(training_sample)

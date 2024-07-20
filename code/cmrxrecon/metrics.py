@@ -28,7 +28,7 @@ class metrics(pl.LightningModule):
         Returns:
         torch.Tensor: The SSIM value.
         """
-        data_range = ground_truth.max() - ground_truth.min()
+        data_range = torch.max(ground_truth.max(), predicted.max()) - torch.min(ground_truth.min(), predicted.min())
         ssim_metric = StructuralSimilarityIndexMeasure(data_range=data_range.item()).to(device)
         return ssim_metric(ground_truth, predicted)
 

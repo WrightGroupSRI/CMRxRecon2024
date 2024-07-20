@@ -8,12 +8,18 @@ from pytorch_lightning.callbacks import DeviceStatsMonitor
 
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import DeviceStatsMonitor
+#from pytorch_lightning.profilers import AdvancedProfiler
+from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.loggers import WandbLogger
 import torch
+from pytorch_lightning.callbacks import ModelCheckpoint
+
 
 def main(args):
-    wandb_logger = WandbLogger(project='cmrxrecon', log_model=True, name=args.run_name, save_dir='cmrxrecon/dl/model_weights/')
+    wandb_logger = WandbLogger(project='cmrxrecon', log_model='all', name=args.run_name)
 
+    checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
     
     if args.model == 'lowrank':
@@ -25,6 +31,7 @@ def main(args):
     else: 
         raise ValueError(f'{args.model} not implemented!')
 
+    profiler = PyTorchProfiler(export_to_chrome=True, filename="prof")
     trainer = pl.Trainer(
             default_root_dir='cmrxrecon/dl/model_weights/',
             max_epochs=args.max_epochs, 
@@ -32,7 +39,7 @@ def main(args):
             limit_train_batches=args.limit_batches,
             limit_val_batches=args.limit_batches,
             limit_test_batches=args.limit_batches,
-            callbacks=[DeviceStatsMonitor()]
+            callbacks=[checkpoint_callback]
             )
 
     trainer.fit(model=model, datamodule=data_module)
