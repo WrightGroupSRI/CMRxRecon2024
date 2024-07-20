@@ -154,9 +154,6 @@
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
                 "args": [
-                    "-q",
-                    "-s",
-                    "${file}"
                 ]
             },
             "breakpoints": {

@@ -73,7 +73,7 @@ class NormalizeKSpace(object):
     def __call__(self, sample:torch.Tensor):
         # dimensions [t, h, w]
         under, fully_sampled = sample
-        return under/under.abs().amax((-1, -2), keepdim=True), fully_sampled/under.abs().amax((-1, -2), keepdim=True)
+        return under/under.abs().amax((-1, -2, -3), keepdim=True), fully_sampled/under.abs().amax((-1, -2, -3), keepdim=True)
 
 
 class ZeroPadKSpace(object):
