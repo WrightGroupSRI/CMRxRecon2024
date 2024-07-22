@@ -4,26 +4,41 @@ from cmrxrecon.dl.unet import UnetLightning
 from cmrxrecon.dl.AllContrastDataModule import AllContrastDataModule
 from cmrxrecon.dl.SelfSupervsiedDataModule import SelfSupervisedDataModule
 import argparse
-from pytorch_lightning.callbacks import DeviceStatsMonitor
-
+from datetime import timedelta, datetime
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import DeviceStatsMonitor
 #from pytorch_lightning.profilers import AdvancedProfiler
 from pytorch_lightning.profilers import PyTorchProfiler
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 def main(args):
-    wandb_logger = WandbLogger(project='cmrxrecon', log_model='all', name=args.run_name)
+    wandb_logger = WandbLogger(project='cmrxrecon', log_model='all', name=args.run_name, save_dir='cmrxrecon/dl/model_weights/')
+    
+    if args.resubmit:
+        filename='checkpoint'
+    else:
+        now = datetime.now()
+        filename= now.strftime('%Y-%m-%d_%H') + '{epoch}-{val/loss:.2f}-{val/ssim:.2f}'
+    
+    
+    checkpoint_callback = ModelCheckpoint(
+            dirpath='/home/kadotab/scratch/cmrxrecon_checkpoints/', 
+            filename=filename, 
+            train_time_interval=timedelta(minutes=30), 
+            save_last=True)
 
     checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
     
     if args.model == 'lowrank':
-        model = LowRankLightning(cascades=2, unet_chans=32, lr=args.lr)
+        model = LowRankLightning(cascades=5, unet_chans=18)
+        if args.checkpoint_path: 
+            model = LowRankLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'varnet':
         model = VarNetLightning(2)
     elif args.model == 'unet':
@@ -42,7 +57,7 @@ def main(args):
             callbacks=[checkpoint_callback]
             )
 
-    trainer.fit(model=model, datamodule=data_module)
+    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint_path)
     trainer.test(model=model, datamodule=data_module)
 
 if __name__ == '__main__': 
@@ -56,6 +71,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='varnet')
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--limit_batches', type=float, default=1.0)
+    parser.add_argument('--checkpoint_path', type=str)
+    parser.add_argument('--resubmit', action='store_true')
 
     args = parser.parse_args()
     main(args)

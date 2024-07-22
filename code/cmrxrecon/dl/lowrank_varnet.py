@@ -19,10 +19,9 @@ from torchvision.transforms import ToPILImage
 
 
 class LowRankLightning(pl.LightningModule):
-    def __init__(self, cascades:int = 5, unet_chans:int = 18, lr=1e-3):
+    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3):
         super().__init__()
         self.save_hyperparameters()
-
         self.lr = lr
         self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))

@@ -10,10 +10,10 @@
 #SBATCH --mail-user=brenden.kadota@gmail.com
 #SBATCH --mail-type=BEGIN,FAIL
 
-'
-cd to this file and run: sbatch train_lowrank.sh, not sure if this fully trains
-and may need more gpu/time
-'
+
+#cd to this file and run: sbatch train_lowrank.sh, not sure if this fully trains
+#and may need more gpu/time
+
 
 nvidia-smi
 
@@ -30,4 +30,7 @@ wandb offline
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
-    --model lowrank
+    --model lowrank \
+    --lr 1e-4 \
+
+
