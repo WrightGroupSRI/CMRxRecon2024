@@ -201,6 +201,8 @@ class LowRankModl(nn.Module):
         masked_k = self.get_center_masked_k_space(reference_k) 
         masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2)
         temporal_basis, spatial_basis = self.get_singular_vectors(masked_k)
+        cg_spatial = cg_data_consistency_R(iterations=2, lambda_reg=0.05)
+        spatial_basis = cg_spatial(masked_k, torch.zeros_like(spatial_basis, requires_grad=False), sense_maps, temporal_basis, mask)
 
         assert not torch.isnan(sense_maps).any()
 
@@ -341,8 +343,8 @@ class model_step(nn.Module):
         super().__init__()
         self.spatial_model = spatial_model
         self.temporal_model = temporal_model
-        self.cg_spatial = cg_data_consistency_R(iterations=5, lambda_reg=0.05)
-        self.cg_temporal = cg_data_consistency_L(iterations=5, lambda_reg=0.05)
+        self.cg_spatial = cg_data_consistency_R(iterations=3, lambda_reg=0.05)
+        self.cg_temporal = cg_data_consistency_L(iterations=3, lambda_reg=0.05)
 
     def pass_spatial_basis_through_model(self, spatial_basis):
         b, sv, h, w = spatial_basis.shape

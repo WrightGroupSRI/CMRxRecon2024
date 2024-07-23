@@ -32,5 +32,6 @@ srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
     --model lowrank \
     --lr 1e-4 \
+    --checkpoint /home/kadotab/scratch/cmrxrecon/dl/model_weights/epoch=5-step=10356.ckpt
 
 

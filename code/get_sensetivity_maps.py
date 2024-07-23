@@ -6,7 +6,10 @@ import fnmatch
 from cmrxrecon.espirit import espirit 
 from cmrxrecon.dl.lowrank_varnet import ifft_2d_img
 import torch
+from torch.profiler import profile, record_function, ProfilerActivity
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Use the 'Agg' backend
 
             
 
@@ -32,6 +35,7 @@ directories_to_ignore = ['Mask_Task1', 'Mask_Task2', 'ImgSnaphot', 'UnderSample_
 h5_files = find_h5_files(path, directories_to_ignore)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(device)
 for file in h5_files:
     
     with h5py.File(file) as fr: 
@@ -48,9 +52,10 @@ for file in h5_files:
             k_space = k_space['real'] + 1j* k_space['imag']
             k_space = torch.from_numpy(k_space)
             maps = []
-            for chunk in torch.split(k_space, 3, dim=0):
-                map = espirit(chunk[:, 0, ...].permute(0, 2, 3, 1).to(device), 6, 16, 0.001, 0.99, device)
-            maps.append(map.permute(0, 3, 1, 2))
+            for split in torch.split(k_space, 1, dim=0):
+                map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 4, 16, 0.001, 0.99, device)
+                maps.append(map.permute(0, 3, 1, 2))
+
             maps = torch.concat(maps)
             print(maps.shape)
             
@@ -63,7 +68,5 @@ for file in h5_files:
             with h5py.File(os.path.join(dirname, sense_map_name), 'w') as fr: 
                 print(fr.filename)
                 fr.create_dataset('sensetivity', data=maps.cpu().numpy())
-
-            
 
 

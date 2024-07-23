@@ -1,8 +1,10 @@
-import numpy as torch
+import numpy as np
 import torch 
 
 fft  = lambda x, ax : torch.fft.fftshift(torch.fft.fft2(torch.fft.ifftshift(x, dim=ax), dim=ax, norm='ortho'), dim=ax) 
 ifft = lambda X, ax : torch.fft.fftshift(torch.fft.ifft2(torch.fft.ifftshift(X, dim=ax), dim=ax, norm='ortho'), dim=ax) 
+fft_np  = lambda x, ax : np.fft.fftshift(np.fft.fftn(np.fft.ifftshift(x, axes=ax), axes=ax, norm='ortho'), axes=ax) 
+ifft_np = lambda X, ax : np.fft.fftshift(np.fft.ifftn(np.fft.ifftshift(X, axes=ax), axes=ax, norm='ortho'), axes=ax) 
 
 def espirit(X, k, r, t, c, device):
     """
@@ -33,10 +35,8 @@ def espirit(X, k, r, t, c, device):
     # Extract calibration region.    
     C = X[:, sxt[0]:sxt[1], syt[0]:syt[1], :]
 
-    C = C.permute(0, 3, 1, 2)
-    A = torch.nn.functional.unfold(C, kernel_size=k)
+    A = torch.nn.functional.unfold(C.permute(0, 3, 1, 2), kernel_size=k)
     A = A.permute(0, 2, 1)
-
 
     # Take the Singular Value Decomposition.
     _, S, V = torch.linalg.svd(A, full_matrices=False)
@@ -46,29 +46,33 @@ def espirit(X, k, r, t, c, device):
 
     # Select kernels.
     n = torch.max(torch.sum((S >= t * S[:, [0]]), dim=1))
-    n = n.int()
     
     del S, C, A
 
     V = V[:, :, 0:n]
 
-
     # Reshape into k-space kernel, flips it and takes the conjugate
         
-    kernels = torch.reshape(V, (V.shape[0], k , k, nc, n.item()))
+    kernels = torch.reshape(V, (V.shape[0], nc, k , k, n.item()))
+    kernels = kernels.permute(0, 2, 3, 1, 4)
     pad_x = sx - k
     pad_y = sy -k
-    kernels = torch.nn.functional.pad(kernels, (0, 0, 0, 0, pad_x//2, pad_x//2, pad_y//2, pad_y//2, 0, 0))
+    kernels = torch.nn.functional.pad(kernels, (0, 0, 0, 0, pad_y//2, pad_y//2, pad_x//2, pad_x//2, 0, 0))
 
     # Take the iucfft
     axes = (1, 2)
-    kernels = torch.flip(kernels.conj(), axes)
+    kernels.data = torch.flip(kernels.conj(), axes)
     kerimgs = fft(kernels, axes) * torch.sqrt(torch.tensor(sx * sy))/torch.sqrt(torch.tensor(k**2))
+    del kernels, V
 
     # Take the point-wise eigenvalue decomposition and keep eigenvalues greater than c
+    try:
+        u, _, _ = torch.linalg.svd(kerimgs, full_matrices=False, driver='gesvda')
+    except torch.cuda.OutOfMemoryError:
+        u1, _, _ = torch.linalg.svd(kerimgs[:, :kerimgs.shape[1]//2, :, :, :], full_matrices=False, driver='gesvda')
+        u2, _, _ = torch.linalg.svd(kerimgs[:, kerimgs.shape[1]//2:, :, :, :], full_matrices=False, driver='gesvda')
+        u = torch.cat((u1, u2), dim=1)
 
-    u, _, _ = torch.linalg.svd(kerimgs, full_matrices=False)
     maps = u[..., 0]
 
     return maps
-

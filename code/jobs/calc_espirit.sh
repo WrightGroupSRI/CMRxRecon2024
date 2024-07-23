@@ -2,10 +2,10 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-node=1
 #SBATCH --nodes=1
-#SBATCH --mem=20000M 
+#SBATCH --mem=40000M 
 #SBATCH --account=def-mchiew
-#SBATCH --time=7:00:00
-#SBATCH --output=loupe-%j.out
+#SBATCH --time=24:00:00
+#SBATCH --output=espirit-%j.out
 
 
 # setup virtual environment
