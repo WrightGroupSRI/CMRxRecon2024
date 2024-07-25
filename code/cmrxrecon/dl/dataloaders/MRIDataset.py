@@ -9,9 +9,10 @@ from dataclasses import dataclass
 
 
 @dataclass
-class PatientFiles:
+class PatientFile:
     fully_sampled: str
     mask: list[str]
+    sensetivities: str
     slices: int
 
 class MRIDataset(Dataset):
@@ -74,7 +75,7 @@ class MRIDataset(Dataset):
 
 
         # populate list of patient files
-        self.file_list:List[PatientFiles] = []
+        self.file_list:List[PatientFile] = []
         print(f'Counting Slices in {file_prefix}')
         for file in self.target_files:
 
@@ -84,9 +85,10 @@ class MRIDataset(Dataset):
             else:
                 file_name = file_prefix + '_kus_Uniform' + acceleration_factor + '.h5'
             fs_file = os.path.join(target_direcory, file, file_name)
+
             if not os.path.exists(fs_file):
                 continue
-            
+            sense_file = os.path.join(target_direcory, file, file_prefix + '_sensetivites.h5') 
             
             if task_one:
                 mask_file = file_prefix + '_mask_Uniform' + acceleration_factor + '.h5' 
@@ -105,11 +107,11 @@ class MRIDataset(Dataset):
             if all_data:  
                 for mask in mask_files: 
                     self.file_list.append(
-                            PatientFiles(fully_sampled=fs_file, mask=[mask], slices=slices)
+                            PatientFile(fully_sampled=fs_file, mask=[mask], slices=slices, sensetivities=sense_file)
                             )
             else:
                 self.file_list.append(
-                PatientFiles(fully_sampled=fs_file, mask=mask_files, slices=slices)
+                PatientFile(fully_sampled=fs_file, mask=mask_files, slices=slices, sensetivities=sense_file)
                 )
                 
         print(f'Found {sum(patient.slices for patient in self.file_list)} slices!')
@@ -124,32 +126,41 @@ class MRIDataset(Dataset):
         subject_files = self.file_list[vol_idx]
 
         fs_file = subject_files.fully_sampled
+        sense_file = subject_files.sensetivities
         index = torch.randint(len(subject_files.mask), size=(1,))
         mask_file = subject_files.mask[index]
 
-        k_space = None
-        mask = None
+        k_space: torch.Tensor
+        mask: torch.Tensor
+        sensetivity: torch.Tensor
         try:
             with h5py.File(fs_file) as fr:
-                # DATA SHAPE [t, z, c, y, x]
+                # DATA SHAPE [z, t, c, y, x]
                 if self.train:
                     k_space = (fr['kspace_full'][slice_idx])
                 else: 
                     k_space = (fr['kus'][slice_idx])
 
             with h5py.File(mask_file) as fr:
-                # DATA SHAPE [t, z, c, y, x]
-                mask:torch.Tensor = torch.as_tensor(fr['mask'][:])
+                # DATA SHAPE [z, t, c, y, x]
+                mask = torch.as_tensor(fr['mask'][:])
+
+            with h5py.File(sense_file) as fr: 
+                # DATA SHAPE [z, c, y, x]
+                sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
+
         except IOError:
-            print('error opening file')
+            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
 
-
+        
+        # data shape [z, c, y , x]
         mask = mask.bool()
 
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
+        sensetivity = sensetivity.unsqueeze(0)
 
-        mask = np.expand_dims(mask, 1)
-        training_sample = (k_space*mask, k_space)
+        mask = mask.unsqueeze(1)
+        training_sample = (k_space*mask, k_space, sensetivity)
 
         if self.transforms: 
             training_sample = self.transforms(training_sample)

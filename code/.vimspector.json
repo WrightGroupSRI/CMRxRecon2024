@@ -23,14 +23,15 @@
         "MultiContrast": {
             "adapter": "debugpy",
             "configuration": {
-                "name": "Multicontrast dataset",
+                "name": "Debug Train",
                 "type": "python",
                 "request": "launch",
                 "cwd": "${workspaceRoot}",
-                "module": "ml_recon.dataset.Brats_dataset",
+                "program": "train.py",
                 "stopOnEntry": true,
                 "python": "/home/kadotab/ENV/bin/python",
-                "console": "integratedTerminal"
+                "console": "integratedTerminal",
+                "args": ["--model", "lowrank", "--num_workers", "3"]
             },
             "breakpoints": {
                 "exception": {

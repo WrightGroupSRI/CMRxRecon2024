@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, random_split
 import torch 
 from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
 from torchvision.transforms import Compose
+from cmrxrecon.utils import fft_2d_img, ifft_2d_img
 
 
 
@@ -44,7 +45,8 @@ class AllContrastDataModule(pl.LightningDataModule):
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers, 
                 pin_memory=True,
-                collate_fn=collate_fn
+                collate_fn=collate_fn, 
+                shuffle=True
                 )
 
     def test_dataloader(self):
@@ -61,10 +63,10 @@ def pad_to_max_time(data:torch.Tensor, max_time:int):
     return torch.nn.functional.pad(data, (0, 0, 0, 0, 0, 0, 0, max_time - data.shape[0]))
 
 def collate_fn(batch):
-    max_time = max([x.shape[0] for x, _ in batch])
-    us = [pad_to_max_time(x, max_time) for x, _ in batch]
-    fs = [pad_to_max_time(x, max_time) for _, x in batch]
-    return (torch.stack(us), torch.stack(fs))
+    max_time = max([x.shape[0] for x, _, _ in batch])
+    us = [pad_to_max_time(x, max_time) for x, _, _ in batch]
+    fs = [pad_to_max_time(x, max_time) for _, x, _ in batch]
+    return (torch.stack(us), torch.stack(fs), torch.stack([sense for _, _, sense in batch]))
 
 class NormalizeKSpace(object):
     """Normalize k space to 1 for each slice 
@@ -72,8 +74,8 @@ class NormalizeKSpace(object):
 
     def __call__(self, sample:torch.Tensor):
         # dimensions [t, h, w]
-        under, fully_sampled = sample
-        return under/under.abs().amax((-1, -2, -3), keepdim=True), fully_sampled/under.abs().amax((-1, -2, -3), keepdim=True)
+        under, fully_sampled, sense = sample
+        return under/under.abs().max(), fully_sampled/under.abs().max(), sense
 
 
 class ZeroPadKSpace(object):
@@ -81,10 +83,11 @@ class ZeroPadKSpace(object):
     """
 
     def __call__(self, sample):
-        under, fully_sampled = sample
+        under, fully_sampled, sense = sample
         under = self.pad_to_shape(under, [256, 512])
         fully_sampled = self.pad_to_shape(fully_sampled, [256, 512])
-        return under, fully_sampled
+        sense = ifft_2d_img(self.pad_to_shape(fft_2d_img(sense), [256, 512]))
+        return under, fully_sampled, sense
 
     def pad_to_shape(self, tensor, target_shape):
         _, _, x, y = tensor.shape

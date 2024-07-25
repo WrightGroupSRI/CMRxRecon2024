@@ -24,6 +24,8 @@ def main(args):
     else:
         now = datetime.now()
         filename= now.strftime('%Y-%m-%d_%H') + '{epoch}-{val/loss:.2f}-{val/ssim:.2f}'
+
+    print(filename)
     
     
     checkpoint_callback = ModelCheckpoint(
@@ -32,7 +34,7 @@ def main(args):
             train_time_interval=timedelta(minutes=30), 
             save_last=True)
 
-    checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
+    #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
     
     if args.model == 'lowrank':
@@ -51,6 +53,7 @@ def main(args):
             default_root_dir='cmrxrecon/dl/model_weights/',
             max_epochs=args.max_epochs, 
             logger=wandb_logger,
+            strategy='ddp',
             limit_train_batches=args.limit_batches,
             limit_val_batches=args.limit_batches,
             limit_test_batches=args.limit_batches,

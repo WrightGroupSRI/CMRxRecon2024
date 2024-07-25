@@ -15,8 +15,8 @@ class UnetLightning(pl.LightningModule):
         self.model = Unet(input_channels, input_channels, depth, chan)
 
 
-    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
-        undersampled, fully_sampled = batch
+    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
+        undersampled, fully_sampled, _ = batch
 
         y, x = undersampled.shape[-2], undersampled.shape[-1]
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
@@ -26,8 +26,8 @@ class UnetLightning(pl.LightningModule):
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
         return loss
 
-    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int): 
-        undersampled, fully_sampled = batch
+    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
+        undersampled, fully_sampled, _ = batch
 
         y, x = undersampled.shape[-2], undersampled.shape[-1]
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)

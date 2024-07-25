@@ -6,15 +6,10 @@ import wandb
 
 from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.resnet import ResNet
-from cmrxrecon.dl.sensetivitymodel import SensetivityModel
-from cmrxrecon.utils import complex_to_real
 from cmrxrecon.metrics import metrics
 from torch.fft import ifftshift, fftshift, fft2, ifft2
 import pytorch_lightning as pl 
-import matplotlib.pyplot as plt
-import einops
 from torchvision.utils import make_grid
-from torchvision.transforms import ToPILImage
 
 
 
@@ -26,10 +21,10 @@ class LowRankLightning(pl.LightningModule):
         self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_index: int): 
-        undersampled, fully_sampled = batch
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
+        undersampled, fully_sampled, sense = batch
 
-        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
 
@@ -37,49 +32,31 @@ class LowRankLightning(pl.LightningModule):
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
+                gt_imgs = self.rss(fully_sampled)
+                grid = self.prepare_images(gt_imgs, gt_imgs.abs().max())
+                self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
                 # imgs [b, t, h, w]
-                imgs = self.rss(fs_estimate)
-                grid = self.prepare_images(imgs)
+                es_imgs = self.rss(fs_estimate)
+                grid = self.prepare_images(es_imgs, gt_imgs.abs().max())
                 self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Validation Images")])
                 
-                first_time = undersampled[:, [0], :, :, :]
-                masked_k = self.model.sens_model.mask(first_time, first_time != 0)
-                self.logger.log_image("train/sense_masked_k", [(100*masked_k[0, 0, [0], :, :].abs()/masked_k[0, 0, 0, :, :].abs().max()).clip(0, 1)])
-
-                sense_maps = self.model.sens_model(undersampled, undersampled != 0)
                 # [b, t, s, h, w]
-                plot_sense = sense_maps[:, 0, :, :, :]
-                plot_sense = plot_sense[0, :, :, :].unsqueeze(1)
+                plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
 
-                grid = make_grid(plot_sense.abs()/plot_sense.abs().max()).clip(0, 1)
+                grid = make_grid(plot_sense.abs(), normalize=True)
                 self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
 
-                imgs = self.rss(fully_sampled)
-                grid = self.prepare_images(imgs)
-                self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
 
                 masked_k = self.model.get_center_masked_k_space(undersampled) 
                 self.logger.log_image("train/center_mask_k", [(100*masked_k[0, 0, [0], :, :].abs()/masked_k[0, 0, [0], :, :].abs().max()).clip(0, 1)])
-                masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2)
-                temporal_basis, spatial_basis = self.model.get_singular_vectors(masked_k)
-
-                grid = self.prepare_images(spatial_basis.abs())
-                self.logger.log_image("train/spatial_components", [wandb.Image(grid, caption="Spatial singular vectors")])
-
-                if isinstance(self.logger, pl.loggers.WandbLogger) and self.global_rank == 0:
-                    self.logger.experiment.log({"train/time_components": wandb.plot.line_series(
-                                                xs=torch.arange(temporal_basis.shape[1]).tolist(),
-                                                ys=temporal_basis[0].permute(1, 0).abs().tolist(),
-                                                keys=['component1', 'component2', 'component3']
-                                                )})
-
+                masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2)
         return loss
 
 
     def validation_step(self, batch, batch_index): 
-        undersampled, fully_sampled = batch
+        undersampled, fully_sampled, sense = batch
 
-        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         estimate_images = self.rss(fs_estimate)
@@ -95,10 +72,10 @@ class LowRankLightning(pl.LightningModule):
                 )
         if batch_index == 0:  # Log only for the first batch in each epoch
             # imgs [b, t, h, w]
-            grid = self.prepare_images(estimate_images)
+            grid = self.prepare_images(estimate_images, max_val=ground_truth_images.abs().max())
             self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
 
-            grid = self.prepare_images(ground_truth_images)
+            grid = self.prepare_images(ground_truth_images, max_val=ground_truth_images.abs().max())
             self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
 
         return {
@@ -108,9 +85,9 @@ class LowRankLightning(pl.LightningModule):
                 }
 
     def test_step(self, batch, batch_index): 
-        undersampled, fully_sampled = batch
+        undersampled, fully_sampled, sense = batch
 
-        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         estimate_images = self.rss(fs_estimate)
@@ -140,9 +117,9 @@ class LowRankLightning(pl.LightningModule):
     def rss(self, data):
         return ifft_2d_img(data).abs().pow(2).sum(2)
     
-    def prepare_images(self, imgs):
+    def prepare_images(self, imgs, max_val):
         imgs = imgs[0, :, :, :].unsqueeze(1)
-        grid = make_grid(imgs/imgs.max()*10).clip(0, 1)
+        grid = make_grid(imgs, normalize=True, value_range=(0, max_val))
         return grid
 
 
@@ -150,7 +127,6 @@ class LowRankModl(nn.Module):
     def __init__(self, 
                  cascades:int = 6,
                  unet_chans: int = 18, 
-                 sens_chans:int = 8,
                  singular_cutoff:int = 3
                  ):
         super().__init__()
@@ -161,20 +137,19 @@ class LowRankModl(nn.Module):
         
         # populate cascade with model backbone
         spatial_denoiser = partial(Unet, 2, 2, chans=unet_chans)
-        #temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans, dimension='1d')
+        temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans//2, dimension='1d')
         self.cascades = nn.ModuleList(
-            [model_step(spatial_denoiser(), None) for _ in range(cascades)]
+            [model_step(spatial_denoiser(), temporal_denoiser()) for _ in range(cascades)]
         )
 
         # model to estimate sensetivities
-        self.sens_model = SensetivityModel(2, 2, chans=sens_chans, mask_center=True)
 
     
 
     def get_singular_vectors(self, data):
         b, t, h, w = data.shape
 
-        temporal_basis, singular_values, spatial_basis = torch.svd(data.view(b, t, h*w))
+        temporal_basis, _, spatial_basis = torch.svd(data.view(b, t, h*w))
         spatial_basis = spatial_basis.conj().transpose(-1, -2)
         components = self.singular_cuttoff #(singular_values > singular_values[0]*self.singular_cuttoff).numel()
         temporal_basis = temporal_basis[:, :, :components]
@@ -192,17 +167,17 @@ class LowRankModl(nn.Module):
 
 
     # k-space sent in [B, T, C, H, W]
-    def forward(self, reference_k, mask):
+    def forward(self, reference_k, mask, sense_maps):
         # get sensetivity maps
         assert not torch.isnan(reference_k).any()
         assert not torch.isnan(mask).any()
-        sense_maps = self.sens_model(reference_k, mask)
 
         masked_k = self.get_center_masked_k_space(reference_k) 
         masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2)
         temporal_basis, spatial_basis = self.get_singular_vectors(masked_k)
-        cg_spatial = cg_data_consistency_R(iterations=2, lambda_reg=0.05)
-        spatial_basis = cg_spatial(masked_k, torch.zeros_like(spatial_basis, requires_grad=False), sense_maps, temporal_basis, mask)
+        cg_spatial = cg_data_consistency_R(iterations=2, lambda_reg=0).to(spatial_basis.device)
+
+        spatial_basis = cg_spatial(reference_k, torch.zeros_like(spatial_basis, requires_grad=False, device=spatial_basis.device), sense_maps, temporal_basis, mask)
 
         assert not torch.isnan(sense_maps).any()
 
@@ -310,6 +285,7 @@ Solves for the subproblem for L
 
 Solves the problem ||Y - ALR|| - ||L - model(L)|| where we solve for L
 """
+
 class cg_data_consistency_L(cg_data_consistency):
     def __init__(self, iterations:int = 30, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
         super().__init__(iterations, error_tolerance, lambda_reg)
@@ -363,30 +339,33 @@ class model_step(nn.Module):
         denoised_spatail_basis = self.unnorm(denoised_spatail_basis, mean, std)
         return denoised_spatail_basis
 
+    def pass_temporal_basis_through_model(self, temporal_basis):
+        ## reshape temporal basis for passing through network
+        temporal_basis = temporal_basis.unsqueeze(1).permute(0, 1, 3, 2)
+        temporal_basis, mean, std = self.norm(temporal_basis, dims=1)
+
+        temporal_basis = view_as_real(temporal_basis)
+        b, cmplx, sv, t = temporal_basis.shape
+        temporal_basis = temporal_basis.view(b*sv, cmplx, t)
+        #
+        ## pass through network
+        denoised_temporal_basis = self.temporal_model(temporal_basis) 
+        denoised_temporal_basis = denoised_temporal_basis.view(b, cmplx, sv, t)
+
+        denoised_temporal_basis = view_as_complex(denoised_temporal_basis)
+
+        denoised_temporal_basis = self.unnorm(denoised_temporal_basis, mean, std)
+        denoised_temporal_basis = denoised_temporal_basis.permute(0, 1, 3, 2).squeeze(1)
+        return denoised_temporal_basis
+
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, Y, spatial_basis, temporal_basis, sensetivities, mask):
         denoised_spatial_basis = self.pass_spatial_basis_through_model(spatial_basis)
         spatial_basis = self.cg_spatial(Y, denoised_spatial_basis, sensetivities, temporal_basis, mask)
         
-        ## reshape temporal basis for passing through network
-        #temporal_basis = temporal_basis.unsqueeze(1).permute(0, 1, 3, 2)
-        #temporal_basis, mean, std = self.norm(temporal_basis, dims=1)
-
-        #temporal_basis = view_as_real(temporal_basis)
-        #b, cmplx, sv, t = temporal_basis.shape
-        #temporal_basis = temporal_basis.reshape(b*sv, cmplx, t)
-        #
-        ## pass through network
-        #denoised_temporal_basis = self.temporal_model(temporal_basis) 
-        #denoised_temporal_basis = denoised_temporal_basis.reshape(b, cmplx, sv, t)
-
-        #denoised_temporal_basis = view_as_complex(denoised_temporal_basis)
-
-        #temporal_basis = self.unnorm(denoised_temporal_basis, mean, std)
-        #temporal_basis = temporal_basis.permute(0, 1, 3, 2).squeeze(1)
-        #
+        denoised_temporal_basis = self.pass_temporal_basis_through_model(temporal_basis)
         ## solve temporal problem with CG
-        #temporal_basis = self.cg_temporal(Y, temporal_basis, sensetivities, spatial_basis, mask)
+        temporal_basis = self.cg_temporal(Y, denoised_temporal_basis, sensetivities, denoised_spatial_basis, mask)
 
         return spatial_basis, temporal_basis
 
@@ -424,7 +403,7 @@ ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim
 def view_as_real(data): 
     shape = data.shape
     real_data = torch.view_as_real(data)
-    real_data = real_data.view(shape[0], shape[1]*2, *shape[2:])
+    real_data = real_data.reshape(shape[0], shape[1]*2, *shape[2:])
     return real_data
 
 def view_as_complex(data):

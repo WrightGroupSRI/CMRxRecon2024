@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=3
-#SBATCH --gpus-per-node=2
-#SBATCH --ntasks-per-node=2
+#SBATCH --gpus-per-node=4
+#SBATCH --ntasks-per-node=4
 #SBATCH --nodes=1
-#SBATCH --mem-per-cpu=4G 
+#SBATCH --mem-per-cpu=6G 
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=unet-%j.out

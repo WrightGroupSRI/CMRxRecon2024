@@ -3,7 +3,7 @@
 #SBATCH --gpus-per-node=4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --mem-per-cpu=6G 
+#SBATCH --mem=80G
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=lowrank-%j.out
@@ -26,12 +26,11 @@ pip install --no-index -r /home/kadotab/requirements2.txt
 
 
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
-wandb offline
+wandb online
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
+    --batch_size 2 \
     --model lowrank \
     --lr 1e-4 \
-    --checkpoint /home/kadotab/scratch/cmrxrecon/dl/model_weights/epoch=5-step=10356.ckpt
-
-
+    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/last-v3.ckpt
