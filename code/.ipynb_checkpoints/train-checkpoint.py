@@ -48,7 +48,7 @@ def main(args):
     else: 
         raise ValueError(f'{args.model} not implemented!')
     
-    #wandb_logger.experiment.update({'model': args.model})
+    wandb_logger.experiment.config['model'] = args.model
 
     profiler = PyTorchProfiler(export_to_chrome=True, filename="prof")
     trainer = pl.Trainer(
@@ -62,8 +62,6 @@ def main(args):
             callbacks=[checkpoint_callback]
             )
 
-    if trainer.global_rank == 0: 
-        wandb_logger.experiment.config.update({'model': args.model})
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint_path)
     trainer.test(model=model, datamodule=data_module)
 

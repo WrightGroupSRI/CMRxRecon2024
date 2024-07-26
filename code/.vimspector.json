@@ -31,7 +31,7 @@
                 "stopOnEntry": true,
                 "python": "/home/kadotab/ENV/bin/python",
                 "console": "integratedTerminal",
-                "args": ["--model", "lowrank", "--num_workers", "3"]
+                "args": ["--model", "varnet", "--num_workers", "3"]
             },
             "breakpoints": {
                 "exception": {

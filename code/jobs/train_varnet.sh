@@ -24,4 +24,5 @@ wandb offline
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
-    --model varnet
+    --model varnet \
+    --lr 1e-3

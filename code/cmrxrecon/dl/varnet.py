@@ -7,23 +7,24 @@ from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.sensetivitymodel import SensetivityModel
 from cmrxrecon.utils import complex_to_real, root_sum_of_squares, ifft_2d_img, fft_2d_img
 from cmrxrecon.metrics import metrics
-from torch.fft import ifftshift, fftshift, fft2, ifft2
 from pytorch_lightning import LightningModule
+from torchvision.utils import make_grid
 import einops
+import wandb
 
 
 
 class VarNetLightning(LightningModule):
     def __init__(self, input_channels: int, cascades:int=4, unet_chans:int=18):
         super().__init__()
-
+        self.save_hyperparameters()
         self.model = VarNet(input_channels, cascades = cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))
         self.automatic_optimization = False
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_index: int): 
+    def training_step(self, batch, batch_index: int): 
         # datashape [b, t, h, w]
-        undersampled, fully_sampled = batch
+        undersampled, fully_sampled, sense = batch
         opt = self.optimizers()
         opt.zero_grad()
          
@@ -36,7 +37,7 @@ class VarNetLightning(LightningModule):
             b, t, c, h, w = under.shape
 
             under = under.reshape(b*t, 1, c, h, w)
-            fs_estimate = self.model(under, under != 0)
+            fs_estimate = self.model(under, under != 0, sense)
             fs_estimate = fs_estimate.reshape(b, t, c, h, w)
 
             loss = self.loss_fn(fs, fs_estimate)
@@ -47,18 +48,29 @@ class VarNetLightning(LightningModule):
 
         opt.step() 
         ave_loss = sum(loss_arr)/len(loss_arr)
-        self.log('train/loss', ave_loss, prog_bar=True, on_step=True)
+        fs_estimates = torch.cat(fs_estimates, dim=1)
+        self.log('train/loss', ave_loss, prog_bar=True, on_step=True, on_epoch=True)
+        if batch_index == 0:
+            gt_imgs = root_sum_of_squares(ifft_2d_img(fully_sampled), coil_dim=2)
+            gt_imgs = gt_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(gt_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
+            # imgs [b, t, h, w]
+            es_imgs = root_sum_of_squares(ifft_2d_img(fs_estimate), coil_dim=2)
+            es_imgs = es_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(es_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Validation Images")])
         return ave_loss 
 
 
     def validation_step(self, batch, batch_index): 
         # datashape [b, t, h, w]
-        undersampled, fully_sampled = batch
+        undersampled, fully_sampled, sense = batch
 
         b, t, c, h, w = undersampled.shape
 
         undersampled = undersampled.reshape(b*t, 1, c, h, w)
-        fs_estimate = self.model(undersampled, undersampled != 0)
+        fs_estimate = self.model(undersampled, undersampled != 0, sense)
         fs_estimate = fs_estimate.reshape(b, t, c, h, w)
 
         loss = self.loss_fn(fully_sampled, fs_estimate)
@@ -76,6 +88,14 @@ class VarNetLightning(LightningModule):
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
                 on_epoch=True, prog_bar=True, logger=True
                 )
+        if batch_index == 0:
+            gt_imgs = fully_sampled[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(gt_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
+            # imgs [b, t, h, w]
+            es_imgs = fs_estimate[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(es_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Validation Images")])
 
         return {
                 'loss': loss, 
@@ -118,18 +138,15 @@ class VarNet(nn.Module):
             [VarnetBlock(model_backbone()) for _ in range(cascades)]
         )
 
-        # model to estimate sensetivities
-        self.sens_model = SensetivityModel(2, 2, chans=sens_chans, mask_center=True)
 
         # regularizer weight
         self.lambda_reg = nn.Parameter(torch.ones((cascades)))
 
     # k-space sent in [B, C, H, W]
-    def forward(self, reference_k, mask):
+    def forward(self, reference_k, mask, sense_maps):
         # get sensetivity maps
         assert not torch.isnan(reference_k).any()
         assert not torch.isnan(mask).any()
-        sense_maps = self.sens_model(reference_k, mask)
 
         assert not torch.isnan(sense_maps).any()
 

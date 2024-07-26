@@ -2,15 +2,18 @@ import math
 from typing import Tuple, List
 
 import torch.nn as nn 
+import wandb
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl 
 from cmrxrecon.utils import root_sum_of_squares, ifft_2d_img
 from cmrxrecon.metrics import metrics
+from torchvision.utils import make_grid
 
 class UnetLightning(pl.LightningModule):
     def __init__(self, input_channels: int, depth:int = 4, chan:int = 18):
         super().__init__()
+        self.save_hyperparameters()
 
         self.model = Unet(input_channels, input_channels, depth, chan)
 
@@ -18,18 +21,28 @@ class UnetLightning(pl.LightningModule):
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled, _ = batch
 
-        y, x = undersampled.shape[-2], undersampled.shape[-1]
-        aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
-        fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
+        b, t, c, y, x = undersampled.shape
+        aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)
+        fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)
         fs_estimate = self.model(aliased)
         
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
+        if batch_index == 0:
+            gt_imgs = fully_sampled.view(b, t, y, x)
+            gt_imgs = gt_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(gt_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
+            # imgs [b, t, h, w]
+            es_imgs = fs_estimate.view(b, t, y, x)
+            es_imgs = es_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(es_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Validation Images")])
         return loss
 
     def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled, _ = batch
 
-        y, x = undersampled.shape[-2], undersampled.shape[-1]
+        b, t, c, y, x = undersampled.shape
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fs_estimate = self.model(aliased)
@@ -43,6 +56,17 @@ class UnetLightning(pl.LightningModule):
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
                 on_epoch=True, prog_bar=True, logger=True, sync_dist=True
                 )
+        if batch_index == 0: 
+            gt_imgs = fully_sampled.view(b, t, y, x)
+            gt_imgs = gt_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(gt_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
+            # imgs [b, t, h, w]
+            es_imgs = fs_estimate.view(b, t, y, x)
+            es_imgs = es_imgs[0, :, :, :].unsqueeze(1).abs()
+            grid = make_grid(es_imgs, normalize=True, value_range=(0, gt_imgs.max()/4))
+            self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
+
 
         return {
                 'loss': loss, 

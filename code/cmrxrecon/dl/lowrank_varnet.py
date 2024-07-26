@@ -33,17 +33,17 @@ class LowRankLightning(pl.LightningModule):
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
                 gt_imgs = self.rss(fully_sampled)
-                grid = self.prepare_images(gt_imgs, gt_imgs.abs().max())
+                grid = self.prepare_images(gt_imgs, gt_imgs.abs().max()/4)
                 self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
                 # imgs [b, t, h, w]
                 es_imgs = self.rss(fs_estimate)
-                grid = self.prepare_images(es_imgs, gt_imgs.abs().max())
+                grid = self.prepare_images(es_imgs, gt_imgs.abs().max()/4)
                 self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Validation Images")])
                 
                 # [b, t, s, h, w]
                 plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
 
-                grid = make_grid(plot_sense.abs(), normalize=True)
+                grid = make_grid(plot_sense.abs())
                 self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
 
 
@@ -72,10 +72,10 @@ class LowRankLightning(pl.LightningModule):
                 )
         if batch_index == 0:  # Log only for the first batch in each epoch
             # imgs [b, t, h, w]
-            grid = self.prepare_images(estimate_images, max_val=ground_truth_images.abs().max())
+            grid = self.prepare_images(estimate_images, max_val=ground_truth_images.abs().max()/4)
             self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
 
-            grid = self.prepare_images(ground_truth_images, max_val=ground_truth_images.abs().max())
+            grid = self.prepare_images(ground_truth_images, max_val=ground_truth_images.abs().max()/4)
             self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
 
         return {
