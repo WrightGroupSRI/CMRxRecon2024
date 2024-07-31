@@ -19,7 +19,7 @@ def main(args):
     elif args.model == 'varnet':
         model = VarNetLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'unet':
-        model = UnetLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
+        model = UnetLightning.load_from_checkpoint(args.checkpoint_path,input_channels=1, lr=args.lr)
     else:
         raise ValueError(f'{args.model} not implemented!')
     
