@@ -11,11 +11,12 @@ from cmrxrecon.metrics import metrics
 from torchvision.utils import make_grid
 
 class UnetLightning(pl.LightningModule):
-    def __init__(self, input_channels: int, depth:int = 4, chan:int = 18):
+    def __init__(self, input_channels: int, depth:int=4, chan:int=18, lr:float=1e-3):
         super().__init__()
         self.save_hyperparameters()
 
         self.model = Unet(input_channels, input_channels, depth, chan)
+        self.lr = lr
 
 
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
@@ -87,7 +88,7 @@ class UnetLightning(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
 

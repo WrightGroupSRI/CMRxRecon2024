@@ -66,11 +66,14 @@ def espirit(X, k, r, t, c, device):
     del kernels, V
 
     # Take the point-wise eigenvalue decomposition and keep eigenvalues greater than c
+    driver = None
+    if device == 'cuda': 
+        driver = 'gesvda'
     try:
-        u, _, _ = torch.linalg.svd(kerimgs, full_matrices=False, driver='gesvda')
+        u, _, _ = torch.linalg.svd(kerimgs, full_matrices=False, driver=driver)
     except torch.cuda.OutOfMemoryError:
-        u1, _, _ = torch.linalg.svd(kerimgs[:, :kerimgs.shape[1]//2, :, :, :], full_matrices=False, driver='gesvda')
-        u2, _, _ = torch.linalg.svd(kerimgs[:, kerimgs.shape[1]//2:, :, :, :], full_matrices=False, driver='gesvda')
+        u1, _, _ = torch.linalg.svd(kerimgs[:, :kerimgs.shape[1]//2, :, :, :], full_matrices=False, driver=driver)
+        u2, _, _ = torch.linalg.svd(kerimgs[:, kerimgs.shape[1]//2:, :, :, :], full_matrices=False, driver=driver)
         u = torch.cat((u1, u2), dim=1)
 
     maps = u[..., 0]

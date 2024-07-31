@@ -15,12 +15,13 @@ import wandb
 
 
 class VarNetLightning(LightningModule):
-    def __init__(self, input_channels: int, cascades:int=4, unet_chans:int=18):
+    def __init__(self, input_channels: int, cascades:int=4, unet_chans:int=18, lr=1e-3):
         super().__init__()
         self.save_hyperparameters()
         self.model = VarNet(input_channels, cascades = cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss(torch.view_as_real(x), torch.view_as_real(y))
         self.automatic_optimization = False
+        self.lr = lr
 
     def training_step(self, batch, batch_index: int): 
         # datashape [b, t, h, w]
@@ -116,7 +117,7 @@ class VarNetLightning(LightningModule):
 
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
 

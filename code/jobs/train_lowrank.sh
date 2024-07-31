@@ -26,11 +26,11 @@ pip install --no-index -r /home/kadotab/requirements2.txt
 
 
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
-wandb online
+wandb offline
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
     --batch_size 2 \
     --model lowrank \
-    --lr 1e-4 \
-    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/last-v3.ckpt
+    --lr 1e-3 \
+    #--checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/last-v3.ckpt

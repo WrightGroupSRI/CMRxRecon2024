@@ -87,7 +87,8 @@ class ZeroPadKSpace(object):
         under = self.pad_to_shape(under, [256, 512])
         fully_sampled = self.pad_to_shape(fully_sampled, [256, 512])
         sense = ifft_2d_img(self.pad_to_shape(fft_2d_img(sense), [256, 512]))
-        return under, fully_sampled, sense
+        sense_mag = torch.sqrt((sense * sense.conj()).sum(dim=1, keepdim=True))
+        return under, fully_sampled, sense/sense_mag
 
     def pad_to_shape(self, tensor, target_shape):
         _, _, x, y = tensor.shape

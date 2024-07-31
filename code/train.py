@@ -38,13 +38,13 @@ def main(args):
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
     
     if args.model == 'lowrank':
-        model = LowRankLightning(cascades=5, unet_chans=18)
+        model = LowRankLightning(cascades=5, unet_chans=18, lr=args.lr)
         if args.checkpoint_path: 
             model = LowRankLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'varnet':
-        model = VarNetLightning(2)
+        model = VarNetLightning(2, lr=args.lr)
     elif args.model == 'unet':
-        model = UnetLightning(1)
+        model = UnetLightning(1, lr=args.lr)
     else: 
         raise ValueError(f'{args.model} not implemented!')
     

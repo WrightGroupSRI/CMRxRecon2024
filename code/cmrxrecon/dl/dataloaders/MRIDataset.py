@@ -150,6 +150,7 @@ class MRIDataset(Dataset):
                 sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
 
         except IOError:
+            print(f"ERROR")
             print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
 
         
