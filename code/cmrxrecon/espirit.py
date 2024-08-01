@@ -70,12 +70,16 @@ def espirit(X, k, r, t, c, device):
     if device == 'cuda': 
         driver = 'gesvda'
     try:
-        u, _, _ = torch.linalg.svd(kerimgs, full_matrices=False, driver=driver)
+        u, s, _ = torch.linalg.svd(kerimgs, full_matrices=False, driver=driver)
     except torch.cuda.OutOfMemoryError:
-        u1, _, _ = torch.linalg.svd(kerimgs[:, :kerimgs.shape[1]//2, :, :, :], full_matrices=False, driver=driver)
-        u2, _, _ = torch.linalg.svd(kerimgs[:, kerimgs.shape[1]//2:, :, :, :], full_matrices=False, driver=driver)
+        u1, s1, _ = torch.linalg.svd(kerimgs[:, :kerimgs.shape[1]//2, :, :, :], full_matrices=False, driver=driver)
+        u2, s2, _ = torch.linalg.svd(kerimgs[:, kerimgs.shape[1]//2:, :, :, :], full_matrices=False, driver=driver)
         u = torch.cat((u1, u2), dim=1)
+        s = torch.cat((s1, s2), dim=1)
 
-    maps = u[..., 0]
+    temp_maps = u[..., 0]
+    maps = torch.zeros_like(temp_maps)
+    above_threshold = s[..., 0].pow(2) > c
+    maps[above_threshold] = temp_maps[above_threshold]
 
     return maps

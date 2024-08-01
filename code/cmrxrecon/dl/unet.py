@@ -127,10 +127,9 @@ class Unet(nn.Module):
             cur_chan //= 2
 
         # final convolution at the end 
-        self.conv2d = nn.Conv2d(chans, out_chan, 1, bias=False)
+        self.conv2d = nn.Conv2d(chans, out_chan, 1, bias=True)
 
     def forward(self, x):
-        x, pad_sizes = self.pad(x)
 
         # save output of each down sampling layer
         stack = []
@@ -145,37 +144,7 @@ class Unet(nn.Module):
             x = layer(x, stack[-i - 2])
 
         x = self.conv2d(x)
-        x = self.unpad(x, *pad_sizes)
         return x
-
-    # pad input image to be divisible by 16 for unet downsampling
-    def pad(
-        self, x: torch.Tensor
-    ) -> Tuple[torch.Tensor, Tuple[List[int], List[int], int, int]]:
-        _, _, h, w = x.shape
-        w_mult = ((w - 1) | 15) + 1
-        h_mult = ((h - 1) | 15) + 1
-        w_pad = [math.floor((w_mult - w) / 2), math.ceil((w_mult - w) / 2)]
-        h_pad = [math.floor((h_mult - h) / 2), math.ceil((h_mult - h) / 2)]
-        # TODO: fix this type when PyTorch fixes theirs
-        # the documentation lies - this actually takes a list
-        # https://github.com/pytorch/pytorch/blob/master/torch/nn/functional.py#L3457
-        # https://github.com/pytorch/pytorch/pull/16949
-        x = F.pad(x, w_pad + h_pad)
-
-        return x, (h_pad, w_pad, h_mult, w_mult)
-
-    # unpad unet input
-    def unpad(
-        self,
-        x: torch.Tensor,
-        h_pad: List[int],
-        w_pad: List[int],
-        h_mult: int,
-        w_mult: int,
-    ) -> torch.Tensor:
-        return x[..., h_pad[0] : h_mult - h_pad[1], w_pad[0] : w_mult - w_pad[1]]
-
 
 
 class Unet_down(nn.Module):
@@ -204,18 +173,18 @@ class Unet_up(nn.Module):
 
 
 class double_conv(nn.Module):
-    def __init__(self, in_chans, out_chans, drop_prob):
+    def __init__(self, in_chans, out_chans, drop_prob, negative_slope=0.2):
         
         super().__init__()
 
         self.layers = nn.Sequential(
-            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=True),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=negative_slope, inplace=True),
             nn.Dropout2d(drop_prob),
-            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_chans, affine=True),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=True),
+            nn.InstanceNorm2d(out_chans),
+            nn.LeakyReLU(negative_slope=negative_slope, inplace=True),
             nn.Dropout2d(drop_prob),
         )
       
@@ -238,7 +207,7 @@ class up(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
           nn.ConvTranspose2d(in_chan, out_chan, stride=2, kernel_size=2, bias=False),
-          nn.InstanceNorm2d(out_chan, affine=True),
+          nn.InstanceNorm2d(out_chan),
           nn.LeakyReLU(negative_slope=0.2, inplace=True),
         )
 

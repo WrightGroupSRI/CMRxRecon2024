@@ -39,7 +39,7 @@ def main(args):
             save_last=True)
 
     #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
-    data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
+    data_module = BasisDataLoader(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
     if args.model == 'lowrank':
         model = LowRankLightning(cascades=5, unet_chans=18, lr=args.lr)
         if args.checkpoint_path: 

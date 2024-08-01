@@ -19,5 +19,21 @@ def real_to_complex(images: torch.Tensor):
 def root_sum_of_squares(data: torch.Tensor, coil_dim=0):
     return torch.sqrt(data.abs().pow(2).sum(coil_dim) + 1e-6)
 
-fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes), dim=axes)
-ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes), dim=axes)
+
+def pad_to_shape(tensor, target_shape):
+    _, _, x, y = tensor.shape
+    pad_x = (target_shape[0] - x) // 2
+    pad_y = (target_shape[1] - y) // 2
+    padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
+    original_size = (x, y)
+    padded_tensor = torch.nn.functional.pad(tensor, padding, "constant", 0)
+    return padded_tensor, original_size
+
+def crop_to_shape(tensor, original_size):
+    _, _, x, y = tensor.shape
+    diff_x = (original_size[0] - x)//2
+    diff_y = (original_size[1] - x)//2
+    return tensor[:, :, diff_x:original_size[0], diff_y:original_size[1]]
+
+fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)
+ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)

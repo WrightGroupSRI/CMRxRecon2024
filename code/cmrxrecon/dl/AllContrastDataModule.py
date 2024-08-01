@@ -46,7 +46,7 @@ class AllContrastDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers, 
                 pin_memory=True,
                 collate_fn=collate_fn, 
-                shuffle=True
+                shuffle=False
                 )
 
     def test_dataloader(self):
@@ -78,6 +78,7 @@ class NormalizeKSpace(object):
         return under/under.abs().max(), fully_sampled/under.abs().max(), sense
 
 
+
 class ZeroPadKSpace(object):
     """Zero pad k-space data to [256, 512] in [x, y] dimensions.
     """
@@ -96,3 +97,5 @@ class ZeroPadKSpace(object):
         pad_y = (target_shape[1] - y) // 2
         padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
         return torch.nn.functional.pad(tensor, padding, "constant", 0)
+
+

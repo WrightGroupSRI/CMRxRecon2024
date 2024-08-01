@@ -42,6 +42,8 @@ def main(args):
             recon_func = cxr.espirit_recon
         case "vn":
             recon_func = cxr.recon
+        case "ours":
+            recon_func = cxr.lowrank
 
     match args.challenge:
         case "training":

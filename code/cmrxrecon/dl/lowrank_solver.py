@@ -13,163 +13,24 @@ from torchvision.utils import make_grid
 
 
 
-class LowRankLightning(pl.LightningModule):
-    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3):
-        super().__init__()
-        self.save_hyperparameters()
-        self.lr = lr
-        self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans)
-        self.loss_fn = lambda x, y: torch.nn.functional.l1_loss(torch.view_as_real(x), torch.view_as_real(y))
-
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
-        undersampled, fully_sampled, sense = batch
-
-        fs_estimate = self.model(undersampled, undersampled != 0, sense)
-        
-        loss = self.loss_fn(fully_sampled, fs_estimate)
-        gt_imgs = self.rss(fully_sampled)
-        es_imgs = self.rss(fs_estimate)
-        ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
-        ssim_loss = 1 - ssim
-
-        self.log('train/loss', loss + ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-        self.log('train/l1', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-        self.log('train/ssim', ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-
-        loss = loss + 1e-1 * ssim_loss
-        
-        if batch_index == 0:  # Log only for the first batch in each epoch
-            with torch.no_grad():
-                grid = self.prepare_images(gt_imgs, gt_imgs.abs().max()/4)
-                self.logger.log_image("train/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
-                # imgs [b, t, h, w]
-                grid = self.prepare_images(es_imgs, gt_imgs.abs().max()/4)
-                self.logger.log_image("train/estimate_images", [wandb.Image(grid, caption="Estimated Images")])
-
-                under_samp_imgs = self.rss(undersampled)
-                grid = self.prepare_images(under_samp_imgs, gt_imgs.abs().max()/4)
-                self.logger.log_image("train/zero_filled", [wandb.Image(grid, caption="Zero filled images")])
-                
-                # [b, t, s, h, w]
-                plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
-
-                grid = make_grid(plot_sense.abs())
-                self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
-
-                spatial_basis, temporal_basis = self.model.estimate_inital_bases(undersampled, sense, undersampled != 0)
-                init_image = self.model.combined_bases(spatial_basis, temporal_basis)
-                grid = self.prepare_images(init_image.abs(), gt_imgs.abs().max()/4)
-                self.logger.log_image("train/init_images", [wandb.Image(grid, caption="Zero filled images")])
-
-                for i, cascade in enumerate(self.model.cascades):
-                    # go through ith model cascade
-                    new_spatial_basis, new_temporal_basis = cascade(undersampled, spatial_basis, temporal_basis, sense, undersampled != 0)
-                    cascade_imgs = self.model.combined_bases(new_spatial_basis, new_temporal_basis)
-                    grid = self.prepare_images(cascade_imgs.abs(), gt_imgs.abs().max()/4)
-                    self.logger.log_image("train/cascade_" + str(i), [wandb.Image(grid, caption="Zero filled images")])
-                    spatial_basis = new_spatial_basis
-                    temporal_basis = new_temporal_basis
-                
-                images = self.model.combined_bases(spatial_basis, temporal_basis)
-                grid = self.prepare_images(images.abs(), gt_imgs.abs().max()/4)
-                self.logger.log_image("train/final", [wandb.Image(grid, caption="Zero filled images")])
-            
-
-        return loss
-
-
-    def validation_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
-
-        fs_estimate = self.model(undersampled, undersampled != 0, sense)
-        
-        loss = self.loss_fn(fully_sampled, fs_estimate)
-        estimate_images = self.rss(fs_estimate)
-        ground_truth_images = self.rss(fully_sampled)
-
-        ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
-        nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
-        psnr = metrics.calculate_psnr(ground_truth_images, estimate_images, self.device)
-
-        self.log_dict(
-                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
-                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
-                )
-        if batch_index == 0:  # Log only for the first batch in each epoch
-            # imgs [b, t, h, w]
-            grid = self.prepare_images(estimate_images, max_val=ground_truth_images.abs().max()/4)
-            self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
-
-            grid = self.prepare_images(ground_truth_images, max_val=ground_truth_images.abs().max()/4)
-            self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
-
-            zf = self.rss(undersampled)
-            grid = self.prepare_images(zf, max_val=ground_truth_images.abs().max()/4)
-            self.logger.log_image("val/zero_filled", [wandb.Image(grid, caption="Zero Filled")])
-
-        return {
-                'loss': loss, 
-                'ssim': ssim, 
-                'psnr': psnr
-                }
-
-    def test_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
-
-        fs_estimate = self.model(undersampled, undersampled != 0, sense)
-        
-        loss = self.loss_fn(fully_sampled, fs_estimate)
-        estimate_images = self.rss(fs_estimate)
-        ground_truth_images = self.rss(fully_sampled)
-
-        ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
-        nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
-        psnr = metrics.calculate_psnr(ground_truth_images, estimate_images, self.device)
-
-        self.log_dict(
-                {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
-                on_epoch=True, prog_bar=True, logger=True, sync_dist=True
-                )
-
-        return {
-                'loss': loss, 
-                'ssim': ssim, 
-                'psnr': psnr
-                }
-
-
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
-
-    def rss(self, data):
-        return ifft_2d_img(data).abs().pow(2).sum(2).sqrt()
-    
-    def prepare_images(self, imgs, max_val):
-        imgs = imgs[0, :, :, :].unsqueeze(1)
-        grid = make_grid(imgs, normalize=True, value_range=(0, max_val), nrow=3)
-        return grid
-
-
-class LowRankModl(nn.Module):
+class LowRankSolver(nn.Module):
     def __init__(self, 
-                 cascades:int = 6,
-                 unet_chans: int = 18, 
-                 singular_cutoff:int = 3
+                 spatial_denoiser: torch.nn.Module, 
+                 temporal_denoiser: torch.nn.Module,
+                 cascades:int = 5
                  ):
         super().__init__()
 
         # module for cascades
         self.cascade = nn.ModuleList()
-        self.singular_cuttoff = singular_cutoff
+        self.lambda_reg = 1e-1
         
         # populate cascade with model backbone
-        spatial_denoiser = partial(Unet, 2, 2, chans=unet_chans)
+        spatial_denoiser = spatial_denoiser
         #temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans//2, dimension='1d')
-        #temporal_denoiser = None
+        temporal_denoiser = temporal_denoiser
         self.cascades = nn.ModuleList(
-            [model_step(spatial_denoiser(), None) for _ in range(cascades)]
+            [model_step(spatial_denoiser, temporal_denoiser, self.lambda_reg) for _ in range(cascades)]
         )
 
         # model to estimate sensetivities
@@ -354,12 +215,12 @@ class cg_data_consistency_L(cg_data_consistency):
 
 
 class model_step(nn.Module):
-    def __init__(self, spatial_model: nn.Module, temporal_model: nn.Module) -> None:
+    def __init__(self, spatial_model: nn.Module, temporal_model: nn.Module, lambda_reg) -> None:
         super().__init__()
         self.spatial_model = spatial_model
-        #self.temporal_model = temporal_model
-        self.cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=1)
-        #self.cg_temporal = cg_data_consistency_L(iterations=10, lambda_reg=1)
+        self.temporal_model = temporal_model
+        self.cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=lambda_reg)
+        self.cg_temporal = cg_data_consistency_L(iterations=10, lambda_reg=lambda_reg)
 
     def pass_spatial_basis_through_model(self, spatial_basis):
         b, sv, h, w = spatial_basis.shape
@@ -399,12 +260,12 @@ class model_step(nn.Module):
 
     # sensetivities data [B, contrast, C, H, W]
     def forward(self, Y, spatial_basis, temporal_basis, sensetivities, mask):
-        denoised_spatial_basis = spatial_basis + self.pass_spatial_basis_through_model(spatial_basis)
+        denoised_spatial_basis = spatial_basis + self.spatial_model(spatial_basis)
         spatial_basis = self.cg_spatial(Y, denoised_spatial_basis, sensetivities, temporal_basis, mask)
         
-        #denoised_temporal_basis = temporal_basis + self.pass_temporal_basis_through_model(temporal_basis)
+        denoised_temporal_basis = temporal_basis + self.temporal_model(temporal_basis)
         ## solve temporal problem with CG
-        #temporal_basis = self.cg_temporal(Y, denoised_temporal_basis, sensetivities, spatial_basis, mask)
+        temporal_basis = self.cg_temporal(Y, denoised_temporal_basis, sensetivities, spatial_basis, mask)
 
         return spatial_basis, temporal_basis
 

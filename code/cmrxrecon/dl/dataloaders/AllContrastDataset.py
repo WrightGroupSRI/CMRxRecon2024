@@ -32,6 +32,7 @@ class AllContrastDataset(Dataset):
         
         contrasts_names = os.listdir(parent_dir)
         self.datasets = []
+        self.transforms = transforms
         for contrast in contrasts_names: 
 
             path = os.path.join(parent_dir, contrast)
