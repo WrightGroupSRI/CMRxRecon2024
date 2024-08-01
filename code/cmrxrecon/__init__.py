@@ -12,6 +12,7 @@
 
 from .zf_recon import zf_recon
 from .bart_recon import *
+from .unet_recon import *
 from functools import partial
 
 itsense_recon = partial(bart_recon, command="pics -g -d5 -l2 -r 0.1")

@@ -25,8 +25,6 @@ COPY code/requirements.txt /
 
 RUN pip install -r /requirements.txt
 
-RUN python3 -m cupyx.tools.install_library --library nccl --cuda 12.x
-
 # Copy the code directory to /app
 COPY code /app
 

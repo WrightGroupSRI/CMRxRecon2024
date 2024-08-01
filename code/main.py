@@ -40,6 +40,8 @@ def main(args):
             recon_func = cxr.sense_recon
         case "cs":
             recon_func = cxr.espirit_recon
+        case "unet":
+            recon_func = cxr.unet_recon
         case "vn":
             recon_func = cxr.recon
         case "ours":
