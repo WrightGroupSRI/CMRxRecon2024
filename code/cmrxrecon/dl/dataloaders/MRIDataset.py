@@ -22,8 +22,8 @@ class MRIDataset(Dataset):
     def __init__(
             self, 
             directory:str,
-            task_one: bool = True, 
-            train: bool = True, 
+            task_one: bool = False, 
+            train: bool = False, 
             acceleration_factor: Literal['4', '8', '10'] = '4',
             file_prefix: str = 'cine_lax',
             transforms: Optional[Callable] = None,
@@ -75,7 +75,6 @@ class MRIDataset(Dataset):
         else:
             self.mask_dir = os.path.join(directory, 'Mask_Task2')
 
-
         # populate list of patient files
         self.file_list:List[PatientFile] = []
         print(f'Counting Slices in {file_prefix}')
@@ -98,7 +97,7 @@ class MRIDataset(Dataset):
             else:
                 
                 mask_files = os.listdir(os.path.join(self.mask_dir, file))
-                mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.h5' in mask_file and file_prefix in mask_file]
+                mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.mat' in mask_file and file_prefix in mask_file]
 
             with h5py.File(fs_file) as fr:
                 # DATA SHAPE [t, z, c, y, x]
@@ -126,11 +125,17 @@ class MRIDataset(Dataset):
         vol_idx, slice_idx = self.get_vol_slice_index(index)
         
         subject_files = self.file_list[vol_idx]
+        print(subject_files)
 
         fs_file = subject_files.fully_sampled
         sense_file = subject_files.sensetivities
-        index = torch.randint(len(subject_files.mask), size=(1,))
-        mask_file = subject_files.mask[index]
+        try:
+            index = torch.randint(len(subject_files.mask), size=(1,))
+            mask_file = subject_files.mask[index]
+            validation = False
+        except:
+            index = 0
+            validation = True
 
         k_space: torch.Tensor
         mask: torch.Tensor
@@ -143,27 +148,36 @@ class MRIDataset(Dataset):
                 else: 
                     k_space = (fr['kus'][slice_idx])
 
-            with h5py.File(mask_file) as fr:
-                # DATA SHAPE [z, t, c, y, x]
-                mask = torch.as_tensor(fr['mask'][:])
+            if not validation:
+                with h5py.File(mask_file) as fr:
+                    # DATA SHAPE [z, t, c, y, x]
+                    mask = torch.as_tensor(fr['mask'][:])
+                    print(mask.shape)
 
-            with h5py.File(sense_file) as fr: 
-                # DATA SHAPE [z, c, y, x]
-                sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
+                with h5py.File(sense_file) as fr: 
+                    # DATA SHAPE [z, c, y, x]
+                    sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
 
         except IOError:
             print(f"ERROR")
-            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
+            # print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
 
         
         # data shape [z, c, y , x]
-        mask = mask.bool()
+        if not validation:
+            mask = mask.bool()
+        else:
+            mask = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
+            sensetivity = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
 
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
         sensetivity = sensetivity.unsqueeze(0)
 
         mask = mask.unsqueeze(1)
-        training_sample = (k_space*mask, k_space, sensetivity)
+        if not validation:
+            training_sample = (k_space*mask, k_space, sensetivity)
+        else:
+            training_sample = (k_space, k_space, sensetivity)
 
         if self.transforms: 
             training_sample = self.transforms(training_sample)

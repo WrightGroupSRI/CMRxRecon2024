@@ -11,7 +11,7 @@ def main(args):
     wandb_logger = WandbLogger(project='cmrxrecon', log_model=True, name=args.run_name, save_dir='cmrxrecon/dl/model_weights/')
     
     # Initialize Data Module
-    data_module = AllContrastDataModule(data_dir=args.test_data_dir, batch_size=args.batch_size, num_workers=args.num_workers)
+    data_module = AllContrastDataModule(data_dir=args.test_data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".mat")
     
     # Load Model Checkpoint
     if args.model == 'lowrank':
@@ -19,13 +19,13 @@ def main(args):
     elif args.model == 'varnet':
         model = VarNetLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'unet':
-        model = UnetLightning.load_from_checkpoint(args.checkpoint_path,input_channels=1, lr=args.lr)
+        model = UnetLightning.load_from_checkpoint(args.checkpoint_path, input_channels=1, lr=args.lr, persistent=False)
     else:
         raise ValueError(f'{args.model} not implemented!')
     
     # Initialize Trainer
     trainer = pl.Trainer(
-            default_root_dir='/home/jaykumar/scratch/cmrxrecon/dl/model_weights/',
+            default_root_dir='/home/calderds/Documents/model_weights/',
             logger=wandb_logger,
             strategy='ddp',
             limit_test_batches=args.limit_batches

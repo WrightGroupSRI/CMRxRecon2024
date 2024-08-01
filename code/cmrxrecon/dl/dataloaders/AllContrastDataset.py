@@ -11,7 +11,7 @@ class AllContrastDataset(Dataset):
     def __init__(
             self, 
             parent_dir: str,
-            task_one: bool = True,
+            task_one: bool = False,
             train: bool = True,
             acceleration_factor: Literal['4', '8', '10'] = '4',
             transforms: Optional[Callable] = None,
@@ -32,11 +32,13 @@ class AllContrastDataset(Dataset):
         """
         
         contrasts_names = os.listdir(parent_dir)
+        # don't need flow, blackblood
         self.datasets = []
         self.transforms = transforms
         for contrast in contrasts_names: 
 
             path = os.path.join(parent_dir, contrast)
+            print(path)
 
             match contrast.lower():
                 case 'aorta':
@@ -48,15 +50,15 @@ class AllContrastDataset(Dataset):
                 case 'mapping':
                     prefixes = ['T1map', 'T2map']
                 case 'blackblood':
-                    if train:
+                    if train or not task_one:
                         continue
                     prefixes = ['blackblood']
                 case 'flow2d': 
-                    if train:
+                    if train or not task_one:
                         continue
                     prefixes = ['flow2d']
                 case _:
-                    print(f'Validation dataset found! {contrast.lower}')
+                    print(f'Validation dataset found! {contrast.lower()}')
                     continue
 
             for prefix in prefixes:
