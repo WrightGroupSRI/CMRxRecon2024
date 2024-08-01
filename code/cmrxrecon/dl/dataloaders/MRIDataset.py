@@ -28,6 +28,7 @@ class MRIDataset(Dataset):
             file_prefix: str = 'cine_lax',
             transforms: Optional[Callable] = None,
             all_data: bool = False, 
+            file_extension: str = '.h5'
             ):
         """
         Initalize a contrast dataset based on parameters
@@ -47,6 +48,7 @@ class MRIDataset(Dataset):
 
         super().__init__()
 
+        self.file_extension = file_extension
         self.transforms = transforms
         self.train = train
         
@@ -81,7 +83,7 @@ class MRIDataset(Dataset):
 
             # create paths to fully sampled and mask files
             if self.train:
-                file_name =  file_prefix + '.h5'
+                file_name =  file_prefix + self.file_extension
             else:
                 file_name = file_prefix + '_kus_Uniform' + acceleration_factor + '.h5'
             fs_file = os.path.join(target_direcory, file, file_name)

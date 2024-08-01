@@ -14,7 +14,8 @@ class AllContrastDataset(Dataset):
             task_one: bool = True,
             train: bool = True,
             acceleration_factor: Literal['4', '8', '10'] = '4',
-            transforms: Optional[Callable] = None
+            transforms: Optional[Callable] = None,
+            file_extension: str = ".h5"
             ):
         """
         Initalize Dataset with input parameters with all contrats
@@ -66,7 +67,8 @@ class AllContrastDataset(Dataset):
                            train=train,
                            acceleration_factor=acceleration_factor, 
                            file_prefix = prefix, 
-                           transforms=transforms
+                           transforms=transforms, 
+                           file_extension=file_extension
                            )
                        )
         self.dataset_lengths = [len(dataset) for dataset in self.datasets]

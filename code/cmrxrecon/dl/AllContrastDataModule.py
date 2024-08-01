@@ -9,18 +9,20 @@ from cmrxrecon.utils import fft_2d_img, ifft_2d_img
 
 class AllContrastDataModule(pl.LightningDataModule):
 
-    def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 1, num_workers: int = 0):
+    def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 1, num_workers: int = 0, file_extension=".h5"):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.file_extension = file_extension
 
     def setup(self, stage):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
                 transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]),
-                task_one=False
+                task_one=False,
+                file_extension=self.file_extension
                 )
 
         self.all_contrast_train, self.all_contrast_val, self.all_contrast_test = random_split(
