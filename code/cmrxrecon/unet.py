@@ -22,6 +22,7 @@ class UnetLightning(pl.LightningModule):
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled, _ = batch
 
+        print(f"{undersampled.shape=}")
         b, t, c, y, x = undersampled.shape
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)
         fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)

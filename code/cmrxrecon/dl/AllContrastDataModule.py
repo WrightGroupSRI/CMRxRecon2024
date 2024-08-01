@@ -19,9 +19,9 @@ class AllContrastDataModule(pl.LightningDataModule):
     def setup(self, stage):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
-                train=False,
+                train=True,
                 transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]),
-                task_one=False,
+                task_one=True,
                 file_extension=self.file_extension
                 )
 

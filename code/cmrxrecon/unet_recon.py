@@ -21,7 +21,7 @@ def unet_recon(kspace, device, **kwargs):
     st, sz, sc, sy, sx = kspace.shape
     for z in range(sz):
         kspace[:, z, ...] /= np.max(np.abs(kspace[:, z, ...]))
-    recon_fft = bart(1, "fft -u -i 3", np.transpose(kspace, (4, 3, 2, 1, 0)))
+    recon_fft = bart(1, "fft -u -i 3", np.transpose(kspace, (4, 3, 1, 2, 0)))
     recon_rss = bart(1, "rss 8", recon_fft)
     recon_zf = np.transpose(recon_rss[..., 0, :], (3, 2, 1, 0))
 
@@ -31,8 +31,8 @@ def unet_recon(kspace, device, **kwargs):
     model_input = np.expand_dims(np.expand_dims(np.abs(recon_zf), axis=0), axis=0)
     for t in range(st): 
         for z in range(sz):
-            pad_input, original_recipe = pad_to_shape(torch.cuda.FloatTensor(model_input[:, :, t, z, :, :]), [256, 512])
-            model_output = crop_to_shape(ul.model(pad_input), original_recipe)
+            # pad_input, original_recipe = pad_to_shape(torch.cuda.FloatTensor(model_input[:, :, t, z, :, :]), [256, 512])
+            model_output = ul.model(torch.cuda.FloatTensor(np.abs(model_input)[:, :, t, z, :, :]))
             out = np.transpose(model_output.detach().cpu().numpy(), axes=(3, 2, 1, 0)) 
             recon[..., z, t] = np.squeeze(out)
 
@@ -41,6 +41,3 @@ def unet_recon(kspace, device, **kwargs):
 if __name__ == '__main__': 
     path = ""
     main(path)
-
-
-

@@ -25,6 +25,7 @@ class UnetLightning(pl.LightningModule):
         b, t, c, y, x = undersampled.shape
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)
         fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).view(-1, 1, y, x)
+        print(aliased.shape)
         fs_estimate = self.model(aliased)
         
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
@@ -46,6 +47,7 @@ class UnetLightning(pl.LightningModule):
         b, t, c, y, x = undersampled.shape
         aliased = root_sum_of_squares(ifft_2d_img(undersampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
         fully_sampled = root_sum_of_squares(ifft_2d_img(fully_sampled, axes=(-1, -2)), coil_dim=2).reshape(-1, 1, y, x)
+        print(aliased.shape)
         fs_estimate = self.model(aliased)
         loss =  torch.nn.functional.mse_loss(fs_estimate, fully_sampled)
 
