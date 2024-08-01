@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 ###############################################################
-# SCRIPT TITLE
-# script functionality
+# UNET RECON
+# wrapper function for image-space unet reconstruction
 #
 # Calder Sheagren
 # University of Toronto
@@ -32,9 +32,8 @@ def unet_recon(kspace, device, **kwargs):
     for t in range(st): 
         for z in range(sz):
             pad_input, original_recipe = pad_to_shape(torch.cuda.FloatTensor(model_input[:, :, t, z, :, :]), [256, 512])
-            model_output = ul.model(pad_input)
-            print(model_output.shape)
-            out = np.transpose(model_output, axes=(3, 2, 1, 0)) 
+            model_output = crop_to_shape(ul.model(pad_input), original_recipe)
+            out = np.transpose(model_output.detach().cpu().numpy(), axes=(3, 2, 1, 0)) 
             recon[..., z, t] = np.squeeze(out)
 
     return recon

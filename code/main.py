@@ -157,7 +157,7 @@ def main(args):
 
                         masked_kspace = kspace
 
-                        img = recon_func(kspace=masked_kspace, mask=mask, sp_device=sp_device)
+                        img = recon_func(masked_kspace, sp_device, weights_dir=args.weights_dir)
 
                         fname = mat_file.split("/")[-1].split(".mat")[0]
                         dest_path = os.path.join(pt_dir_output, fname)

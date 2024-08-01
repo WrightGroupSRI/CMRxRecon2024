@@ -31,9 +31,9 @@ def pad_to_shape(tensor, target_shape):
 
 def crop_to_shape(tensor, original_size):
     _, _, x, y = tensor.shape
-    diff_x = (original_size[0] - x)//2
-    diff_y = (original_size[1] - x)//2
-    return tensor[:, :, diff_x:original_size[0], diff_y:original_size[1]]
+    diff_x = (x - original_size[0])//2
+    diff_y = (y - original_size[1])//2
+    return tensor[:, :, diff_x:original_size[0] + diff_x, diff_y:original_size[1] + diff_y]
 
 fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)
 ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)
