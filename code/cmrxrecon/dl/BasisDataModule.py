@@ -47,10 +47,10 @@ class GetSingularVectors(object):
 def get_singular_vectors(data):
     t, h, w = data.shape
 
-    temporal_basis, _, spatial_basis = torch.linalg.svd(data.view(b, t, h*w), full_matrices=False, driver='gesvdj')
+    temporal_basis, _, spatial_basis = torch.linalg.svd(data.view(t, h*w), full_matrices=False)
     components = 3 #(singular_values > singular_values[0]*self.singular_cuttoff).numel()
-    temporal_basis = temporal_basis[:, :, :components]
-    spatial_basis = spatial_basis[:, :components, :]
+    temporal_basis = temporal_basis[:, :components]
+    spatial_basis = spatial_basis[:components, :]
     spatial_basis = spatial_basis.view(components, h, w)
     
     return temporal_basis, spatial_basis

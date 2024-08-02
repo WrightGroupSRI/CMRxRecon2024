@@ -174,7 +174,6 @@ class SpatialDenoiser(pl.LightningModule):
 
     def get_singular_vectors(self, data):
         b, t, h, w = data.shape
-        print(f'sv shape {data.shape}')
 
         temporal_basis, _, spatial_basis = torch.linalg.svd(data.view(b, t, h*w), full_matrices=False, driver='gesvdj')
         components = 3 #(singular_values > singular_values[0]*self.singular_cuttoff).numel()
@@ -294,8 +293,8 @@ class cg_data_consistency_R(cg_data_consistency):
 ############# HELPER FUNCTIONS ################################################
 ###############################################################################
 
-fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
-ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
+fft_2d_img = lambda x, axes=[-1, -2]: fftshift(fft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
+ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(ifft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
 
 def view_as_real(data): 
     shape = data.shape

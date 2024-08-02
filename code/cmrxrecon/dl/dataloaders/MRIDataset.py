@@ -98,14 +98,16 @@ class MRIDataset(Dataset):
             else:
                 
                 mask_files = os.listdir(os.path.join(self.mask_dir, file))
-                mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.mat' in mask_file and file_prefix in mask_file]
-
-            with h5py.File(fs_file, 'r') as fr:
-                # DATA SHAPE [t, z, c, y, x]
-                if self.train:
-                    slices = (fr['kspace_full'].shape[0])
-                else: 
-                    slices = fr['kus'].shape[0]
+                mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.h5' in mask_file and file_prefix in mask_file]
+            try:
+                with h5py.File(fs_file, 'r') as fr:
+                    # DATA SHAPE [t, z, c, y, x]
+                    if self.train:
+                        slices = (fr['kspace_full'].shape[0])
+                    else: 
+                        slices = fr['kus'].shape[0]
+            except Exception as e: 
+                print(f'could not open {fs_file} with error {e}')
             if all_data:  
                 for mask in mask_files: 
                     self.file_list.append(
@@ -158,23 +160,23 @@ class MRIDataset(Dataset):
                     sensetivity = torch.from_numpy(fr['sensetivity'][:])
                     sensetivity = sensetivity[slice_idx]
         except OSError as e: 
-            print(f'os error: e')
+            print(f'os error: {e}')
             self.create_new_espirit_map(fs_file, 'cuda')
             with h5py.File(sense_file, 'r') as fr: 
                 # DATA SHAPE [z, c, y, x]
                 sensetivity = torch.from_numpy(fr['sensetivity'][:])
                 sensetivity = sensetivity[slice_idx]
         except IndexError as e: 
-            print(f'os error: e')
+            print(f'os error: {e}')
             self.create_new_espirit_map(fs_file, 'cuda')
             with h5py.File(sense_file, 'r') as fr: 
                 # DATA SHAPE [z, c, y, x]
                 sensetivity = torch.from_numpy(fr['sensetivity'][:])
                 sensetivity = sensetivity[slice_idx]
 
-        #except:
-        #    print(f"ERROR")
-        #    print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
+        except:
+            print(f"ERROR")
+            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
 
         
         # data shape [z, c, y , x]

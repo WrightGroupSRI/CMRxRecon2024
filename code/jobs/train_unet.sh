@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=6
 #SBATCH --gpus-per-node=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --nodes=1
@@ -18,8 +18,9 @@ pip install --no-index --upgrade pip
 pip install --no-index -r ~/requirements2.txt
 
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
-wandb offline
+wandb online
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \
+    --batch_size 6 \
     --model unet

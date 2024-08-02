@@ -17,13 +17,14 @@ class LowRankSolver(nn.Module):
     def __init__(self, 
                  spatial_denoiser: torch.nn.Module, 
                  temporal_denoiser: torch.nn.Module,
-                 cascades:int = 5
+                 cascades:int = 5,
+                 lambda_reg = 1e-1
                  ):
         super().__init__()
 
         # module for cascades
         self.cascade = nn.ModuleList()
-        self.lambda_reg = 1e-1
+        self.lambda_reg = lambda_reg
         
         # populate cascade with model backbone
         spatial_denoiser = spatial_denoiser
@@ -67,7 +68,7 @@ class LowRankSolver(nn.Module):
         masked_k = self.get_center_masked_k_space(reference_k) 
         masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2) / (sense_maps * sense_maps.conj()).sum(2)
         temporal_basis, spatial_basis = self.get_singular_vectors(masked_k)
-        cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=1e-1).to(spatial_basis.device)
+        cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1).to(spatial_basis.device)
 
         spatial_basis = cg_spatial(reference_k, torch.zeros_like(spatial_basis, requires_grad=False, device=spatial_basis.device), sense_maps, temporal_basis, mask)
         return spatial_basis, temporal_basis
@@ -92,7 +93,7 @@ class LowRankSolver(nn.Module):
         estimated_k_space = fft_2d_img(coil_images)
         
         #only estimate k-space locations that are unsampled
-        return estimated_k_space
+        return estimated_k_space * ~mask + reference_k
 
 
 """
@@ -106,7 +107,7 @@ Examples:
     use_it_this_way(arg1, arg2)
 """
 class cg_data_consistency(nn.Module):
-    def __init__(self, iterations:int = 30, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
+    def __init__(self, iterations:int = 10, error_tolerance: float = 0.001, lambda_reg=1.0) -> None:
         super().__init__()
         self.iterations = iterations
         self.lambda_reg = nn.Parameter(torch.Tensor([lambda_reg]), requires_grad=True)
@@ -155,7 +156,7 @@ Solve the spatial basis problem ||Y - ALR|| + lambda||R - model(R)|| where we so
 
 """
 class cg_data_consistency_R(cg_data_consistency):
-    def __init__(self, iterations:int = 30, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
+    def __init__(self, iterations:int = 10, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
         super().__init__(iterations=iterations, error_tolerance=error_tolerance, lambda_reg=lambda_reg)
 
     def forward(self, initial_data, model_output, sensetivity, time_basis, mask):
@@ -187,7 +188,7 @@ Solves the problem ||Y - ALR|| - ||L - model(L)|| where we solve for L
 """
 
 class cg_data_consistency_L(cg_data_consistency):
-    def __init__(self, iterations:int = 30, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
+    def __init__(self, iterations:int = 10, error_tolerance: float = 0.001, lambda_reg=0.0) -> None:
         super().__init__(iterations, error_tolerance, lambda_reg)
 
     def forward(self, initial_data, model_output, sensetivity, spatial_basis, mask):
@@ -219,8 +220,8 @@ class model_step(nn.Module):
         super().__init__()
         self.spatial_model = spatial_model
         self.temporal_model = temporal_model
-        self.cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=lambda_reg)
-        self.cg_temporal = cg_data_consistency_L(iterations=10, lambda_reg=lambda_reg)
+        self.cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=lambda_reg)
+        self.cg_temporal = cg_data_consistency_L(iterations=4, lambda_reg=lambda_reg)
 
     def pass_spatial_basis_through_model(self, spatial_basis):
         b, sv, h, w = spatial_basis.shape

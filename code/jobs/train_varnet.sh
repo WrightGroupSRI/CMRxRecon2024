@@ -19,8 +19,11 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip 
 pip install --no-index -r ~/requirements2.txt
 
+export WANDB_HTTP_TIMEOUT=300
+export WANDB_INIT_TIMEOUT=600
+
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
-wandb offline
+wandb online
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 3 \

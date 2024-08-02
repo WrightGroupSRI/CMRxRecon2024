@@ -226,7 +226,7 @@ class double_conv(nn.Module):
 class down(nn.Module):
     def __init__(self):
         super().__init__()
-        self.max_pool = nn.AvgPool2d(2, stride=(2, 2))
+        self.max_pool = nn.MaxPool2d(2, stride=(2, 2))
 
     def forward(self, x):
         x = self.max_pool(x)
