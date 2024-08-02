@@ -37,7 +37,7 @@ def main(args):
         case "zf":
             recon_func = cxr.zf_recon
         case "pi":
-            recon_func = cxr.sense_recon
+            recon_func = cxr.itsense_recon
         case "cs":
             recon_func = cxr.espirit_recon
         case "unet":

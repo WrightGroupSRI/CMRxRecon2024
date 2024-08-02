@@ -13,7 +13,7 @@
 import numpy as np
 from .bartutils import bart 
 
-def zf_recon(kspace=None, mask=None):
+def zf_recon(kspace=None, mask=None, **kwargs):
 
     # transpose to bart format
 
@@ -21,4 +21,5 @@ def zf_recon(kspace=None, mask=None):
 
     zf_recon = bart(1, "fft -i -u 3", bart_kspace)
 
-    return bart(1, "rss 8", zf_recon)
+    return bart(1, "rss 8", zf_recon)[:, :, :, 0, :]
+

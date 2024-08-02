@@ -15,7 +15,7 @@ from .bartutils import bart
 
 from .smaps import maps
 
-def bart_recon(kspace=None, mask=None, command=None, sp_device=None):
+def bart_recon(kspace=None, mask=None, command=None, sp_device=None, **kwargs):
 
     [sht, shz, shc, shy, shx] = kspace.shape
 

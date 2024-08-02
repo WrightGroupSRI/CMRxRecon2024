@@ -29,15 +29,6 @@ def pad_to_shape(tensor, target_shape):
     padded_tensor = torch.nn.functional.pad(tensor, padding, "constant", 0)
     return padded_tensor, original_size
 
-def pad_to_multicoil_shape(tensor, target_shape):
-    _, _, _, x, y = tensor.shape
-    pad_x = (target_shape[0] - x) // 2
-    pad_y = (target_shape[1] - y) // 2
-    padding = (0, 0, 0, 0, pad_y, pad_y, pad_x, pad_x)  # (nocoil, nocoil, left, right, top, bottom)
-    original_size = (x, y)
-    padded_tensor = torch.nn.functional.pad(tensor, padding, "constant", 0)
-    return padded_tensor, original_size
-
 def crop_to_shape(tensor, original_size):
     _, _, x, y = tensor.shape
     diff_x = (x - original_size[0])//2
