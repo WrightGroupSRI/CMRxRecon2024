@@ -39,7 +39,7 @@ def main(args):
             save_last=True)
 
     #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
-    data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".mat")
+    data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".h5")
     if args.model == 'lowrank':
         model = LowRankLightning(cascades=5, unet_chans=18, lr=args.lr)
         if args.checkpoint_path: 
@@ -47,7 +47,7 @@ def main(args):
     elif args.model == 'varnet':
         model = VarNetLightning(2, lr=args.lr)
     elif args.model == 'unet':
-        model = UnetLightning(1, lr=args.lr)
+        model = UnetLightning(1, lr=args.lr, chan=32)
     elif args.model == 'spatial':
         model = SpatialDenoiser(lr=args.lr)
     elif args.model == 'temporal':
