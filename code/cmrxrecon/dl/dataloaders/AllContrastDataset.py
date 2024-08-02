@@ -38,7 +38,6 @@ class AllContrastDataset(Dataset):
         for contrast in contrasts_names: 
 
             path = os.path.join(parent_dir, contrast)
-            print(path)
 
             match contrast.lower():
                 case 'aorta':

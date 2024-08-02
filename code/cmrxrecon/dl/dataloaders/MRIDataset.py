@@ -6,6 +6,7 @@ from typing import Callable, Literal, Optional, Tuple, List
 import torch
 from torch.utils.data import Dataset
 from dataclasses import dataclass
+from cmrxrecon.espirit import espirit
 
 
 @dataclass
@@ -99,7 +100,7 @@ class MRIDataset(Dataset):
                 mask_files = os.listdir(os.path.join(self.mask_dir, file))
                 mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.mat' in mask_file and file_prefix in mask_file]
 
-            with h5py.File(fs_file) as fr:
+            with h5py.File(fs_file, 'r') as fr:
                 # DATA SHAPE [t, z, c, y, x]
                 if self.train:
                     slices = (fr['kspace_full'].shape[0])
@@ -125,7 +126,6 @@ class MRIDataset(Dataset):
         vol_idx, slice_idx = self.get_vol_slice_index(index)
         
         subject_files = self.file_list[vol_idx]
-        print(subject_files)
 
         fs_file = subject_files.fully_sampled
         sense_file = subject_files.sensetivities
@@ -141,7 +141,7 @@ class MRIDataset(Dataset):
         mask: torch.Tensor
         sensetivity: torch.Tensor
         try:
-            with h5py.File(fs_file) as fr:
+            with h5py.File(fs_file, 'r') as fr:
                 # DATA SHAPE [z, t, c, y, x]
                 if self.train:
                     k_space = (fr['kspace_full'][slice_idx])
@@ -149,18 +149,32 @@ class MRIDataset(Dataset):
                     k_space = (fr['kus'][slice_idx])
 
             if not validation:
-                with h5py.File(mask_file) as fr:
+                with h5py.File(mask_file, 'r') as fr:
                     # DATA SHAPE [z, t, c, y, x]
                     mask = torch.as_tensor(fr['mask'][:])
-                    print(mask.shape)
 
-                with h5py.File(sense_file) as fr: 
+                with h5py.File(sense_file, 'r') as fr: 
                     # DATA SHAPE [z, c, y, x]
-                    sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
+                    sensetivity = torch.from_numpy(fr['sensetivity'][:])
+                    sensetivity = sensetivity[slice_idx]
+        except OSError as e: 
+            print(f'os error: e')
+            self.create_new_espirit_map(fs_file, 'cuda')
+            with h5py.File(sense_file, 'r') as fr: 
+                # DATA SHAPE [z, c, y, x]
+                sensetivity = torch.from_numpy(fr['sensetivity'][:])
+                sensetivity = sensetivity[slice_idx]
+        except IndexError as e: 
+            print(f'os error: e')
+            self.create_new_espirit_map(fs_file, 'cuda')
+            with h5py.File(sense_file, 'r') as fr: 
+                # DATA SHAPE [z, c, y, x]
+                sensetivity = torch.from_numpy(fr['sensetivity'][:])
+                sensetivity = sensetivity[slice_idx]
 
-        except IOError:
-            print(f"ERROR")
-            # print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
+        #except:
+        #    print(f"ERROR")
+        #    print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
 
         
         # data shape [z, c, y , x]
@@ -169,16 +183,19 @@ class MRIDataset(Dataset):
         else:
             mask = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
             sensetivity = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
-
+        
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
+        if k_space.shape[0] == 1:
+            print('only found one time dimension')
+            k_space = k_space.repeat(3, 1, 1, 1)
         sensetivity = sensetivity.unsqueeze(0)
 
-        mask = mask.unsqueeze(1)
+        #mask = mask.unsqueeze(1)
         if not validation:
-            training_sample = (k_space*mask, k_space, sensetivity)
+            training_sample = (k_space*mask.unsqueeze(0).unsqueeze(0), k_space, sensetivity)
         else:
             training_sample = (k_space, k_space, sensetivity)
-
+        
         if self.transforms: 
             training_sample = self.transforms(training_sample)
         return training_sample 
@@ -195,6 +212,42 @@ class MRIDataset(Dataset):
             slice_index = index
         return volume_index, slice_index
 
+
+    def create_new_espirit_map(self, file, device):
+        try:
+            with h5py.File(file, 'r') as fr: 
+                print(file)
+                if 'validation' in file.lower():
+                    key = 'kus'
+                else:
+                    key = 'kspace_full'
+                    
+                k_space = fr[key][:]
+                k_space = k_space['real'] + 1j* k_space['imag']
+                k_space = torch.from_numpy(k_space)
+
+            with torch.no_grad():
+                maps = []
+                for split in torch.split(k_space, 1, dim=0):
+                    map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 8, 16, 0.001, 0.99, device)
+                    maps.append(map.permute(0, 3, 1, 2))
+
+                maps = torch.concat(maps)
+                print("sensetivity", maps.shape)
+                
+                dirname = os.path.dirname(file)
+                basename = os.path.basename(file)
+                patient_name = os.path.splitext(file)[0]
+
+                sense_map_name = patient_name + '_sensetivites.h5'
+
+                with h5py.File(os.path.join(dirname, sense_map_name), 'w') as fr: 
+                    print(fr.filename)
+                    fr.create_dataset('sensetivity', data=maps.cpu().numpy())
+        except OSError as e:
+            # Print the error message and the file name
+            print(f"OS error: {e}")
+            print(f"Error occurred in file: {file}")
 
 import matplotlib.pyplot as plt
 if __name__ == '__main__':
