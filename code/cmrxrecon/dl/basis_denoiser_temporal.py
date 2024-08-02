@@ -30,7 +30,7 @@ class TemporalDenoiser(pl.LightningModule):
         undersampled, fully_sampled, sense = batch
         
         masked_k = self.get_center_masked_k_space(undersampled) 
-        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         temporal_basis, _ = self.get_singular_vectors(masked_k)
 
         fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
@@ -68,7 +68,7 @@ class TemporalDenoiser(pl.LightningModule):
         undersampled, fully_sampled, sense = batch
         
         masked_k = self.get_center_masked_k_space(undersampled) 
-        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         temporal_basis, _ = self.get_singular_vectors(masked_k)
 
         fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
@@ -105,10 +105,10 @@ class TemporalDenoiser(pl.LightningModule):
         undersampled, fully_sampled, sense = batch
         
         masked_k = self.get_center_masked_k_space(undersampled) 
-        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         temporal_basis, _ = self.get_singular_vectors(masked_k)
 
-        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         gt_temporal_basis, _ = self.get_singular_vectors(fully_sampled_images)
         gt_temporal_basis = view_as_real(gt_temporal_basis.transpose(-1, -2)).transpose(-1, -2)
 
