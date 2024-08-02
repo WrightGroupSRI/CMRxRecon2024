@@ -4,8 +4,9 @@
 #SBATCH --nodes=1
 #SBATCH --mem=40000M 
 #SBATCH --account=def-mchiew
-#SBATCH --time=24:00:00
+#SBATCH --time=6:00:00
 #SBATCH --output=espirit-%j.out
+#SBATCH --array=0-3
 
 
 # setup virtual environment
@@ -15,4 +16,10 @@ source $SLURM_TMPDIR/env/bin/activate
 pip install --no-index --upgrade pip 
 pip install --no-index -r ~/requirements2.txt
 
-srun python /home/kadotab/python/CMRxRecon2024/code/get_sensetivity_maps.py
+myArray=("/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/TrainingSet/" 
+         "/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Cine/TrainingSet/"
+         "/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Tagging/TrainingSet//"
+         "/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Mapping/TrainingSet/"
+     )
+
+srun python /home/kadotab/python/CMRxRecon2024/code/get_sensetivity_maps.py --path ${myArray[$SLURM_ARRAY_TASK_ID]}
