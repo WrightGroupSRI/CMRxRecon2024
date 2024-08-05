@@ -26,7 +26,7 @@ class SpatialDenoiser(pl.LightningModule):
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
 
-        spatial_basis, mean, std = self.norm(spatial_basis)
+        spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
 
         spatial_basis = view_as_real(spatial_basis)
         output = self.model(spatial_basis)
@@ -34,7 +34,7 @@ class SpatialDenoiser(pl.LightningModule):
         
         fully_sampled_images = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_images)
-        gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
+        gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
         gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
 
         ssim = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
@@ -137,7 +137,7 @@ class SpatialDenoiser(pl.LightningModule):
         
         fully_sampled_image = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_image)
-        gt_spatial_basis = view_as_real(gt_spatial_basis)
+        gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
 
         ssim = metrics.calculate_ssim(denoised_spatial.abs(), gt_spatial_basis.abs(), self.device)
         ssim_loss = 1 - ssim
@@ -166,6 +166,7 @@ class SpatialDenoiser(pl.LightningModule):
     def estimate_inital_bases(self, reference_k, sense_maps, mask):
         masked_k = self.get_center_masked_k_space(reference_k) 
         masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2) / (sense_maps * sense_maps.conj() + 1e-6).sum(2)
+        masked_k[torch.isnan(masked_k)] = 0
         temporal_basis, spatial_basis = self.get_singular_vectors(masked_k)
         cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1).to(spatial_basis.device)
 
@@ -175,10 +176,10 @@ class SpatialDenoiser(pl.LightningModule):
     def get_singular_vectors(self, data):
         b, t, h, w = data.shape
 
-        temporal_basis, _, spatial_basis = torch.linalg.svd(data.view(b, t, h*w), full_matrices=False, driver='gesvdj')
+        temporal_basis, sv, spatial_basis = torch.linalg.svd(data.view(b, t, h*w), full_matrices=False, driver='gesvdj')
         components = 3 #(singular_values > singular_values[0]*self.singular_cuttoff).numel()
         temporal_basis = temporal_basis[:, :, :components]
-        spatial_basis = spatial_basis[:, :components, :]
+        spatial_basis = spatial_basis[:, :components, :] * sv[:, :components].unsqueeze(-1)
         spatial_basis = spatial_basis.view(b, components, h, w)
         
         return temporal_basis, spatial_basis

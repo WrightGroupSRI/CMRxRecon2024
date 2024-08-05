@@ -172,7 +172,6 @@ class MRIDataset(Dataset):
             with h5py.File(sense_file, 'r') as fr: 
                 # DATA SHAPE [z, c, y, x]
                 sensetivity = torch.from_numpy(fr['sensetivity'][:])
-                sensetivity = sensetivity[slice_idx]
 
         except:
             print(f"ERROR")
