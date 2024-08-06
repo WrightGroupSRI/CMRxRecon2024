@@ -436,8 +436,8 @@ class model_step(nn.Module):
 ############# HELPER FUNCTIONS ################################################
 ###############################################################################
 
-fft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
-ifft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
+fft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
+ifft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
 
 def view_as_real(data): 
     shape = data.shape

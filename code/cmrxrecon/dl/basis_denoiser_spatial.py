@@ -18,35 +18,36 @@ class SpatialDenoiser(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = Unet(6, 6, chans=32)
+        self.model = Unet(6, 6, chans=64)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss((x), (y))
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled, sense = batch
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
-
-        spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
+        #spatial_basis, mean, std = self.norm(spatial_basis)
 
         spatial_basis = view_as_real(spatial_basis)
+        spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
+
         output = self.model(spatial_basis)
         denoised_spatial = spatial_basis + output
         
         fully_sampled_images = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         fully_sampled_images[torch.isnan(fully_sampled_images)] = 0
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_images)
-        gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
+        #gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
         gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
+        gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
 
         ssim = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
-        ssim_loss = 1 - ssim
-        loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
+        ssim_loss = (1  - ssim ) 
+        l1_loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
+        loss = ssim_loss + l1_loss
 
         self.log('train/ssim_loss', ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-        self.log('train/l1_loss', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-
-
-        loss = ssim_loss + loss
+        self.log('train/l1_loss', l1_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
+        self.log('train/loss', loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
@@ -80,23 +81,26 @@ class SpatialDenoiser(pl.LightningModule):
         undersampled, fully_sampled, sense = batch
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
-        spatial_basis, mean, std = self.norm(spatial_basis)
+        #spatial_basis, mean, std = self.norm(spatial_basis)
         spatial_basis = view_as_real(spatial_basis)
+        spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
 
         output = self.model(spatial_basis)
         denoised_spatial = spatial_basis + output
         
         fully_sampled_image = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_image)
-        gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
+        #gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
         gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
+        gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
 
-        ssim = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
-        ssim_loss = ssim
-        loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
+        ssim_loss = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
+        l1_loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
+        loss = l1_loss + (1 - ssim_loss) 
 
-        self.log('val/ssim', ssim, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-        self.log('val/l1_loss', loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
+        self.log('val/ssim', ssim_loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
+        self.log('val/l1_loss', l1_loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
+        self.log('val/loss', loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
 
         loss = ssim_loss + loss
 
