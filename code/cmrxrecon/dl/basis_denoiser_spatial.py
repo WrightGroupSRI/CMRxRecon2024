@@ -33,6 +33,7 @@ class SpatialDenoiser(pl.LightningModule):
         denoised_spatial = spatial_basis + output
         
         fully_sampled_images = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
+        fully_sampled_images[torch.isnan(fully_sampled_images)] = 0
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_images)
         gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
         gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())

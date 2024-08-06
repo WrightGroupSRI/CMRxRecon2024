@@ -9,6 +9,7 @@ import torch
 from torch.profiler import profile, record_function, ProfilerActivity
 import matplotlib.pyplot as plt
 import matplotlib
+import argparse
 matplotlib.use('Agg')  # Use the 'Agg' backend
 
             
@@ -29,7 +30,10 @@ def find_h5_files(root_dir, ignore_dirs):
     return h5_files
 
 # Example usage
-path = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/'
+parser = argparse.ArgumentParser()
+parser.add_argument('--path')
+args = parser.parse_args()
+path = args.path
 
 directories_to_ignore = ['Mask_Task1', 'Mask_Task2', 'ImgSnaphot', 'UnderSample_Task1']
 h5_files = find_h5_files(path, directories_to_ignore)
@@ -56,7 +60,7 @@ for file in h5_files:
         with torch.no_grad():
             maps = []
             for split in torch.split(k_space, 1, dim=0):
-                map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 8, 16, 0.001, 0.99, device)
+                map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 6, 16, 0.001, 0.99, device)
                 maps.append(map.permute(0, 3, 1, 2))
 
             maps = torch.concat(maps)
