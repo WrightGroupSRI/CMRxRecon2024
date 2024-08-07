@@ -52,6 +52,7 @@ class MRIDataset(Dataset):
         self.file_extension = file_extension
         self.transforms = transforms
         self.train = train
+        self.task_one = task_one
         
         if self.train:
             directory = os.path.join(directory, 'TrainingSet') # add trailing slash if not there
@@ -184,6 +185,9 @@ class MRIDataset(Dataset):
         else:
             mask = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
             sensetivity = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
+        if self.task_one:
+            mask = mask.unsqueeze(0)
+
         
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
         if k_space.shape[0] == 1:
@@ -191,9 +195,9 @@ class MRIDataset(Dataset):
             k_space = k_space.repeat(3, 1, 1, 1)
         sensetivity = sensetivity.unsqueeze(0)
 
-        #mask = mask.unsqueeze(1)
+        mask = mask.unsqueeze(1)
         if not validation:
-            training_sample = (k_space*mask.unsqueeze(0).unsqueeze(0), k_space, sensetivity)
+            training_sample = (k_space*mask, k_space, sensetivity)
         else:
             training_sample = (k_space, k_space, sensetivity)
         

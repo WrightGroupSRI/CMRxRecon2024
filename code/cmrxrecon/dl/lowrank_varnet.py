@@ -55,6 +55,8 @@ class LowRankLightning(pl.LightningModule):
 
                 grid = make_grid(plot_sense.abs())
                 self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
+                grid = make_grid(plot_sense.angle())
+                self.logger.log_image("train/sense_maps_phase", [wandb.Image(grid, caption="sense")])
 
                 spatial_basis, temporal_basis = self.model.estimate_inital_bases(undersampled, sense, undersampled != 0)
                 init_image = self.model.combined_bases(spatial_basis, temporal_basis)
@@ -144,7 +146,7 @@ class LowRankLightning(pl.LightningModule):
         return optimizer
 
     def rss(self, data):
-        return ifft_2d_img(data).abs().pow(2).sum(2).sqrt()
+        return (ifft_2d_img(data).abs().pow(2).sum(2) + 1e-6).sqrt()
     
     def prepare_images(self, imgs, max_val):
         imgs = imgs[0, :, :, :].unsqueeze(1)
@@ -204,9 +206,9 @@ class LowRankModl(nn.Module):
 
     def estimate_inital_bases(self, reference_k, sense_maps, mask):
         masked_k = self.get_center_masked_k_space(reference_k) 
-        masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2) / (sense_maps * sense_maps.conj()).sum(2)
+        masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2) / (sense_maps * sense_maps.conj() + 1e-6).sum(2)
         temporal_basis, spatial_basis = self.get_singular_vectors(masked_k)
-        cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=1e-1).to(spatial_basis.device)
+        cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1e-1).to(spatial_basis.device)
 
         spatial_basis = cg_spatial(reference_k, torch.zeros_like(spatial_basis, requires_grad=False, device=spatial_basis.device), sense_maps, temporal_basis, mask)
         return spatial_basis, temporal_basis
@@ -219,6 +221,8 @@ class LowRankModl(nn.Module):
         assert not torch.isnan(sense_maps).any()
 
         spatial_basis, temporal_basis = self.estimate_inital_bases(reference_k, sense_maps, mask)
+        assert not torch.isnan(spatial_basis).any()
+        assert not torch.isnan(temporal_basis).any()
 
         for i, cascade in enumerate(self.cascades):
             # go through ith model cascade
@@ -358,7 +362,7 @@ class model_step(nn.Module):
         super().__init__()
         self.spatial_model = spatial_model
         #self.temporal_model = temporal_model
-        self.cg_spatial = cg_data_consistency_R(iterations=10, lambda_reg=1)
+        self.cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1)
         #self.cg_temporal = cg_data_consistency_L(iterations=10, lambda_reg=1)
 
     def pass_spatial_basis_through_model(self, spatial_basis):

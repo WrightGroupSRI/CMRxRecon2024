@@ -22,7 +22,7 @@ class TemporalDenoiser(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = ResNet(in_chan=6, out_chan=6, chans=18, dimension='1d')
+        self.model = ResNet(in_chan=6, out_chan=6, chans=32, dimension='1d', itterations=15)
         self.loss_fn = lambda x, y: torch.nn.functional.l1_loss((x), (y))
         matplotlib.use('Agg')
 
@@ -33,7 +33,7 @@ class TemporalDenoiser(pl.LightningModule):
         masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         temporal_basis, _ = self.get_singular_vectors(masked_k)
 
-        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         gt_temporal_basis, _ = self.get_singular_vectors(fully_sampled_images)
         gt_temporal_basis = view_as_real(gt_temporal_basis.transpose(-1, -2)).transpose(-1, -2)
         
@@ -42,6 +42,7 @@ class TemporalDenoiser(pl.LightningModule):
         temporal_basis = view_as_real(temporal_basis) 
         denoised_temporal = temporal_basis + self.model((temporal_basis))
         denoised_temporal = denoised_temporal.transpose(-1, -2)
+        temporal_basis = temporal_basis.transpose(-1, -2)
         
         loss = self.loss_fn(denoised_temporal, gt_temporal_basis)
 
@@ -51,12 +52,16 @@ class TemporalDenoiser(pl.LightningModule):
             with torch.no_grad():
                 gt_temporal_basis = view_as_complex(gt_temporal_basis.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
                 denoised_temporal = view_as_complex(denoised_temporal.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
+                temporal_basis = view_as_complex(temporal_basis.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
                 plt.clf()
                 plt.figure(figsize=(10, 10))
+                line_styles = ['solid', 'dashed', 'dashdot']
                 for i in range(denoised_temporal.shape[2]):
-                    plt.plot(denoised_temporal[0, :, i].abs(), label=f'Estimated {i}', color='orange') 
+                    plt.plot(denoised_temporal[0, :, i].abs(), label=f'Estimated {i}', color='orange', linestyle=line_styles[i]) 
                 for i in range(denoised_temporal.shape[2]):
-                    plt.plot(gt_temporal_basis[0, :, i].abs(), label=f'Ground Truth {i}', color='blue') 
+                    plt.plot(temporal_basis[0, :, i].abs(), label=f'ZF {i}', color='red', linestyle=line_styles[i]) 
+                for i in range(denoised_temporal.shape[2]):
+                    plt.plot(gt_temporal_basis[0, :, i].abs(), label=f'Ground Truth {i}', color='blue', linestyle=line_styles[i]) 
                 plt.legend()
 
                 self.logger.log_image("train/singular", [wandb.Image(plt)])
@@ -71,7 +76,7 @@ class TemporalDenoiser(pl.LightningModule):
         masked_k = (ifft_2d_img(masked_k) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         temporal_basis, _ = self.get_singular_vectors(masked_k)
 
-        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj()).sum(2)
+        fully_sampled_images = (ifft_2d_img(fully_sampled) * sense.conj()).sum(2) / (sense * sense.conj() + 1e-6).sum(2)
         gt_temporal_basis, _ = self.get_singular_vectors(fully_sampled_images)
         gt_temporal_basis = view_as_real(gt_temporal_basis.transpose(-1, -2)).transpose(-1, -2)
 
@@ -79,6 +84,7 @@ class TemporalDenoiser(pl.LightningModule):
         temporal_basis = view_as_real(temporal_basis)
         denoised_temporal = temporal_basis + self.model((temporal_basis))
         denoised_temporal = denoised_temporal.transpose(-1, -2)
+        temporal_basis = temporal_basis.transpose(-1, -2)
         
         loss = self.loss_fn(denoised_temporal, gt_temporal_basis)
 
@@ -88,13 +94,16 @@ class TemporalDenoiser(pl.LightningModule):
             with torch.no_grad():
                 gt_temporal_basis = view_as_complex(gt_temporal_basis.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
                 denoised_temporal = view_as_complex(denoised_temporal.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
+                temporal_basis = view_as_complex(temporal_basis.transpose(-1, -2)).transpose(-1, -2).cpu().detach()
                 plt.clf()
                 plt.figure(figsize=(10, 10))
+                line_styles = ['solid', 'dashed', 'dashdot']
                 for i in range(denoised_temporal.shape[2]):
-                    plt.plot(denoised_temporal[0, :, i].abs(), label=f'Estimated {i}', color='orange') 
+                    plt.plot(denoised_temporal[0, :, i].abs(), label=f'Estimated {i}', color='orange', linestyle=line_styles[i]) 
                 for i in range(denoised_temporal.shape[2]):
-                    plt.plot(gt_temporal_basis[0, :, i].abs(), label=f'Ground Truth {i}', color='blue') 
-
+                    plt.plot(temporal_basis[0, :, i].abs(), label=f'ZF {i}', color='red', linestyle=line_styles[i]) 
+                for i in range(denoised_temporal.shape[2]):
+                    plt.plot(gt_temporal_basis[0, :, i].abs(), label=f'Ground Truth {i}', color='blue', linestyle=line_styles[i]) 
                 plt.legend()
 
                 self.logger.log_image("val/singular", [wandb.Image(plt)])

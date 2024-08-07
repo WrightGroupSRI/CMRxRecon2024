@@ -21,7 +21,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 def main(args):
-    wandb_logger = WandbLogger(project='cmrxrecon', log_model=True, name=args.run_name, save_dir='cmrxrecon/dl/model_weights/')
+    wandb_logger = WandbLogger(project='cmrxrecon', log_model=True, name=args.run_name, save_dir='.')
     
     if args.resubmit:
         filename='checkpoint'
@@ -50,8 +50,12 @@ def main(args):
         model = UnetLightning(1, lr=args.lr, chan=32)
     elif args.model == 'spatial':
         model = SpatialDenoiser(lr=args.lr)
+        if args.checkpoint_path: 
+            model = SpatialDenoiser.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'temporal':
         model = TemporalDenoiser(lr=args.lr)
+        if args.checkpoint_path: 
+            model = TemporalDenoiser.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     else:
         raise ValueError(f'{args.model} not implemented!')
     
@@ -66,12 +70,14 @@ def main(args):
             limit_train_batches=args.limit_batches,
             limit_val_batches=args.limit_batches,
             limit_test_batches=args.limit_batches,
-            callbacks=[checkpoint_callback]
+            callbacks=[checkpoint_callback], 
+            detect_anomaly=True
             )
 
     if trainer.global_rank == 0: 
         wandb_logger.experiment.config.update({'model': args.model})
-    trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint_path)
+        wandb_logger.watch(model, log="all")
+    trainer.fit(model=model, datamodule=data_module)
     trainer.test(model=model, datamodule=data_module)
 
 if __name__ == '__main__': 

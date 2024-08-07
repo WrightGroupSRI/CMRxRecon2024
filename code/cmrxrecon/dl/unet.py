@@ -259,8 +259,10 @@ class concat(nn.Module):
         diff_y = x_concat_shape[1] - x_shape[1]
         x_concat_trimmed = x_concat
         if diff_x != 0:
+            print('Different sizes! Trimming x')
             x_concat_trimmed = x_concat_trimmed[:, :, diff_x//2:-diff_x//2, :]
         if diff_y != 0:
+            print('Different sizes! Trimming y')
             x_concat_trimmed = x_concat_trimmed[:, :, :, diff_y//2:-diff_y//2]
         concated_data = torch.cat((x, x_concat_trimmed), dim=1)
         return concated_data
