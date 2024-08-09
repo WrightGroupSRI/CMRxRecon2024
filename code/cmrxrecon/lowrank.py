@@ -37,9 +37,7 @@ def lowrank(kspace: np.ndarray, mask=None, device='cpu', lambda_reg=1e-1):
 
     [sht, shz, shc, shy, shx] = kspace.shape
 
-    # this is now x, y, z, c, t
-    bart_kspace = np.transpose(kspace, (4, 3, 1, 2, 0))
-    mask = bart_kspace != 0
+    mask = kspace != 0
     try:
         spatial_denoiser = SpatialDenoiser.load_from_checkpoint(checkpoint_path=SPATIAL_DENOISER_PATH)
         temporal_denoiser = TemporalDenoiser.load_from_checkpoint(checkpoint_path=TEMPORAL_DENOISER_PATH)
@@ -52,24 +50,24 @@ def lowrank(kspace: np.ndarray, mask=None, device='cpu', lambda_reg=1e-1):
 
     solver.to(device)
     solver.eval()
-    bart_kspace = torch.from_numpy(bart_kspace).to(device)
+    kspace = torch.from_numpy(kspace).to(device)
 
     # kspace now z, t, c, h, w
-    bart_kspace = torch.permute(bart_kspace, (2, 4, 3, 0, 1))
+    kspace = torch.permute(kspace, (1, 0, 2, 3, 4))
     
     # UPDATE FOR YOUR ESPIRIT CODE 
-    #maps = calc_espirit(bart_kspace, device)
-    #maps = maps.unsqueeze(1)
-    maps = torch.load('maps.pt')
+    maps = calc_espirit(kspace, device)
+    maps = maps.unsqueeze(1)
+    #maps = torch.load('maps.pt')
 
     print(maps.shape)
-    print(bart_kspace.shape)
+    print(kspace.shape)
     k_space = [] 
     mask = []
     padded_maps = []
 
-    for i in range(bart_kspace.shape[0]): 
-        values = transforms((bart_kspace[i], bart_kspace[i] != 0, maps[i]))
+    for i in range(kspace.shape[0]): 
+        values = transforms((kspace[i], kspace[i], maps[i]))
         k_space.append(values[0])
         mask.append(values[1])
         padded_maps.append(values[2])
@@ -77,7 +75,7 @@ def lowrank(kspace: np.ndarray, mask=None, device='cpu', lambda_reg=1e-1):
     k_space = torch.stack(k_space, dim=0).to(device)
     mask  = torch.stack(mask, dim=0).to(device)
     padded_maps = torch.stack(padded_maps, dim=0).to(device)
-    
+    print(k_space.shape) 
     # solve for k-space
     with torch.no_grad():
         recon_k_space = solver(k_space, k_space != 0, padded_maps)
@@ -96,13 +94,14 @@ import matplotlib
 matplotlib.use('Agg')
 from torchvision.utils import make_grid
 if __name__ == '__main__':
-    file = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/ValidationSet/UnderSample_Task2/P001/aorta_sag_kus_ktGaussian24.mat'
+    file = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/ValidationSet/UnderSample_Task2/P001/aorta_sag_kus_ktGaussian24.h5'
     data = None
     with h5py.File(file, 'r') as fr: 
         data = fr['kus'][:]
     
     data = data['real'] + 1j * data['imag']
 
+    data = np.transpose(data, (1, 0, 2, 3, 4))
     recon = lowrank(data, mask=None, device='cuda')
     plt.imshow(make_grid(torch.from_numpy(recon[:, [0], :, :]))[0])
     plt.savefig('lowrank')
