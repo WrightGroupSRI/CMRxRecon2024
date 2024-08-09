@@ -4,6 +4,7 @@ import torch
 from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
 from torchvision.transforms import Compose
 from cmrxrecon.utils import fft_2d_img, ifft_2d_img
+import math
 import torch.nn.functional as F
 
 
@@ -75,7 +76,7 @@ class NormalizeKSpace(object):
     """Normalize k space to 1 for each slice 
     """
 
-    def __call__(self, sample:torch.Tensor):
+    def __call__(self, sample):
         # dimensions [t, h, w]
         under, fully_sampled, sense = sample
         return under/under.abs().max(), fully_sampled/under.abs().max(), sense
@@ -91,16 +92,19 @@ class ZeroPadKSpace(object):
         under = self.pad_to_shape(under, [256, 512])
         fully_sampled = self.pad_to_shape(fully_sampled, [256, 512])
         sense = self.linear_interpolator(sense)
+        #sense = ifft_2d_img(self.pad_to_shape(fft_2d_img(sense), [256, 512]))
         mask = sense[0, 0, :, :] != 0
+        #mask = sense[0, 0, :, :].abs() > 1e-2
+        #sense = mask * sense
         scaling = (sense[:, :, mask].conj() * sense[:, :, mask]).sum(1)
         sense[:, :, mask] = sense[:, :, mask]/torch.sqrt(scaling)
         return under, fully_sampled, sense
 
     def pad_to_shape(self, tensor, target_shape):
         _, _, x, y = tensor.shape
-        pad_x = (target_shape[0] - x) // 2
-        pad_y = (target_shape[1] - y) // 2
-        padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
+        pad_x = (target_shape[0] - x) 
+        pad_y = (target_shape[1] - y) 
+        padding = (pad_y//2, math.ceil(pad_y/2), pad_x//2, math.ceil(pad_x/2))  # (left, right, top, bottom)
         return torch.nn.functional.pad(tensor, padding, "constant", 0)
 
     def linear_interpolator(self, tensor, target_shape=(256, 512)):
@@ -118,7 +122,7 @@ class ZeroPadKSpace(object):
 
         # Perform interpolation
         interpolated_tensor_mag = F.interpolate(tensor.abs(), size=target_shape, mode='bilinear', align_corners=False)
-        interpolated_tensor_angle = F.interpolate(torch.angle(tensor), size=target_shape, mode='bilinear', align_corners=False)
+        interpolated_tensor_angle = F.interpolate(torch.angle(tensor), size=target_shape, mode='nearest')
 
 
         return interpolated_tensor_mag * torch.exp(1j* interpolated_tensor_angle)

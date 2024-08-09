@@ -4,7 +4,7 @@ from typing import Tuple
 from functools import partial
 import wandb
 
-from cmrxrecon.dl.unet import Unet
+from cmrxrecon.dl.fastmri_unet import Unet
 from cmrxrecon.dl.resnet import ResNet
 from cmrxrecon.metrics import metrics
 from torch.fft import ifftshift, fftshift, fft2, ifft2
@@ -14,11 +14,15 @@ from torchvision.utils import make_grid
 
 
 class SpatialDenoiser(pl.LightningModule):
-    def __init__(self, lr=1e-3):
+    def __init__(self, lr=1e-3, single_channel=False):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = Unet(6, 6, chans=64)
+        self.single_channel = single_channel
+        if single_channel:
+            self.model = Unet(2, 2, chans=64)
+        else:
+            self.model = Unet(6, 6, chans=64)
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss((x), (y))
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
@@ -30,8 +34,16 @@ class SpatialDenoiser(pl.LightningModule):
 
         spatial_basis = view_as_real(spatial_basis)
 
+        b, sv, h, w = spatial_basis.shape
+        if self.single_channel: 
+            spatial_basis = spatial_basis.reshape(b*sv//2, 2, h, w)
+
         output = self.model(spatial_basis)
         denoised_spatial = spatial_basis + output
+
+        if self.single_channel: 
+            denoised_spatial = denoised_spatial.reshape(b, sv, h, w)
+            spatial_basis = spatial_basis.reshape(b, sv, h, w)
         
         fully_sampled_images = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         fully_sampled_images[torch.isnan(fully_sampled_images)] = 0
@@ -160,6 +172,8 @@ class SpatialDenoiser(pl.LightningModule):
         loss = ssim_loss + loss
         return loss
         
+    def forward(self, data):
+        return self.model(data)
 
 
     def configure_optimizers(self):

@@ -1,5 +1,6 @@
 import numpy as np
 import torch 
+import math
 
 fft  = lambda x, ax : torch.fft.fftshift(torch.fft.fft2(torch.fft.ifftshift(x, dim=ax), dim=ax, norm='ortho'), dim=ax) 
 ifft = lambda X, ax : torch.fft.fftshift(torch.fft.ifft2(torch.fft.ifftshift(X, dim=ax), dim=ax, norm='ortho'), dim=ax) 
@@ -57,7 +58,7 @@ def espirit(X, k, r, t, c, device):
     kernels = kernels.permute(0, 2, 3, 1, 4)
     pad_x = sx - k
     pad_y = sy -k
-    kernels = torch.nn.functional.pad(kernels, (0, 0, 0, 0, pad_y//2, pad_y//2, pad_x//2, pad_x//2, 0, 0))
+    kernels = torch.nn.functional.pad(kernels, (0, 0, 0, 0, pad_y//2, math.ceil(pad_y/2), pad_x//2, math.ceil(pad_x/2), 0, 0))
 
     # Take the iucfft
     axes = (1, 2)

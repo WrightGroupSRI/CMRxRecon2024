@@ -4,7 +4,7 @@ import math
 
 import torch.nn as nn
 from cmrxrecon.dl.unet import Unet
-from cmrxrecon.utils import ifft_2d_img, complex_to_real, real_to_complex, root_sum_of_squares
+from cmrxrecon.utils import ifft_2d_img, view_as_real, view_as_complex, root_sum_of_squares
 
 from typing import Tuple
 
@@ -38,7 +38,7 @@ class SensetivityModel(nn.Module):
         assert isinstance(images, torch.Tensor)
 
         # convert to real numbers [b * contrast * coils, cmplx, h, w]
-        images = complex_to_real(images)
+        images = view_as_real(images)
         # norm 
         images, mean, std = self.norm(images)
         assert not torch.isnan(images).any()
@@ -48,7 +48,7 @@ class SensetivityModel(nn.Module):
         # unnorm
         images = self.unnorm(images, mean, std)
         # convert back to complex
-        images = real_to_complex(images)
+        images = view_as_complex(images)
         # rearange back to original format
         images = einops.rearrange(images, '(b t c) 1 h w -> b t c h w', c=number_of_coils, t=n_time)
         # rss to normalize sense maps

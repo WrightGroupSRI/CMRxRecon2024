@@ -5,7 +5,7 @@ from functools import partial
 
 from cmrxrecon.dl.unet import Unet
 from cmrxrecon.dl.sensetivitymodel import SensetivityModel
-from cmrxrecon.utils import complex_to_real, root_sum_of_squares, ifft_2d_img, fft_2d_img
+from cmrxrecon.utils import view_as_real, root_sum_of_squares, ifft_2d_img, fft_2d_img, view_as_complex
 from cmrxrecon.metrics import metrics
 from pytorch_lightning import LightningModule
 from torchvision.utils import make_grid
@@ -179,11 +179,11 @@ class VarnetBlock(nn.Module):
         images = torch.sum(images * sensetivities.conj(), dim=2)
 
         # Images now [B, contrast * 2, h, w] (real)
-        images = complex_to_real(images)
+        images = view_as_real(images)
         images, mean, std = self.norm(images)
         images = self.model(images)
         images = self.unnorm(images, mean, std)
-        images = real_to_complex(images)
+        images = view_as_complex(images)
 
         # Expand
         images = sensetivities * images[:, :, None, :, :]
@@ -206,22 +206,4 @@ class VarnetBlock(nn.Module):
     ) -> torch.Tensor:
         x = x * std + mean
         return x
-
-###############################################################################
-############# HELPER FUNCTIONS ################################################
-###############################################################################
-
-def complex_to_real(images: torch.Tensor):
-    assert images.is_complex(), 'Channel dimension should be at least 2'
-    # images dims [B, C, H, W, complex]
-    images = torch.view_as_real(images)
-    images = einops.rearrange(images, 'b c h w cm -> b (cm c) h w')
-    return images
-
-def real_to_complex(images: torch.Tensor):
-    assert images.shape[1] >= 2, 'Channel dimension should be at least 2'
-    images = einops.rearrange(images, 'b (cm c) h w -> b c h w cm', cm=2)
-    images = images.contiguous()
-    images = torch.view_as_complex(images)
-    return images
 

@@ -10,6 +10,7 @@ from cmrxrecon.metrics import metrics
 from torch.fft import ifftshift, fftshift, fft2, ifft2
 import pytorch_lightning as pl 
 from torchvision.utils import make_grid
+from cmrxrecon.utils import view_as_real, view_as_complex, fft_2d_img, ifft_2d_img
 
 
 
@@ -20,6 +21,10 @@ class LowRankLightning(pl.LightningModule):
         self.lr = lr
         self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans)
         self.loss_fn = lambda x, y: torch.nn.functional.l1_loss(torch.view_as_real(x), torch.view_as_real(y))
+
+    def forward(self, undersampled, mask, sense):
+        fs_estimate = self.model(undersampled, mask, sense)
+        return fs_estimate
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
         undersampled, fully_sampled, sense = batch
@@ -434,26 +439,4 @@ class model_step(nn.Module):
     ) -> torch.Tensor:
         x = x * std + mean
         return x
-
-
-###############################################################################
-############# HELPER FUNCTIONS ################################################
-###############################################################################
-
-fft_2d_img = lambda x, axes=[-1, -2]: ifftshift(fft2(fftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
-ifft_2d_img = lambda x, axes=[-1, -2]: fftshift(ifft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes) 
-
-def view_as_real(data): 
-    shape = data.shape
-    real_data = torch.view_as_real(data)
-    real_data = real_data.reshape(shape[0], shape[1]*2, *shape[2:])
-    return real_data
-
-def view_as_complex(data):
-    shape = data.shape
-    data = data.view(shape[0], shape[1]//2, *shape[2:], 2)
-    complex_data = torch.view_as_complex(data)
-    return complex_data
-
-    
 

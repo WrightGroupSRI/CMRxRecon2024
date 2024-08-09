@@ -49,7 +49,7 @@ def main(args):
     elif args.model == 'unet':
         model = UnetLightning(1, lr=args.lr, chan=32)
     elif args.model == 'spatial':
-        model = SpatialDenoiser(lr=args.lr)
+        model = SpatialDenoiser(lr=args.lr, single_channel=True)
         if args.checkpoint_path: 
             model = SpatialDenoiser.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'temporal':

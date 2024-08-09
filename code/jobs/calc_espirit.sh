@@ -1,8 +1,7 @@
 #!/bin/bash
-#SBATCH --cpus-per-task=1
-#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=32
 #SBATCH --nodes=1
-#SBATCH --mem=40000M 
+#SBATCH --mem=180G 
 #SBATCH --account=def-mchiew
 #SBATCH --time=6:00:00
 #SBATCH --output=espirit-%j.out

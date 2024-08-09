@@ -49,7 +49,7 @@ def save_files(file):
         with torch.no_grad():
             maps = []
             for split in torch.split(k_space, 1, dim=0):
-                map = espirit(split[[0], 0, ...].permute(0, 2, 3, 1).to(device), 5, 16, 0.0001, 0.99, device)
+                map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 5, 16, 0.0001, 0.99, device)
                 maps.append(map.permute(0, 3, 1, 2))
  
             maps = torch.concat(maps, dim=0)
@@ -83,6 +83,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 device = 'cpu'
 
 cpus_per_task = int(os.getenv('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+print(cpus_per_task)
 pool = multiprocessing.Pool(processes=cpus_per_task)
 
 # Use pool.map to apply the process_file function to each input file

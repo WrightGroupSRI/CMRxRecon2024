@@ -160,20 +160,13 @@ class MRIDataset(Dataset):
                     # DATA SHAPE [z, c, y, x]
                     sensetivity = torch.from_numpy(fr['sensetivity'][:])
                     sensetivity = sensetivity[slice_idx]
+                    sensetivity[0] = sensetivity[0].abs()
         except OSError as e: 
             print(f'os error: {e}')
-            self.create_new_espirit_map(fs_file, 'cuda')
-            with h5py.File(sense_file, 'r') as fr: 
-                # DATA SHAPE [z, c, y, x]
-                sensetivity = torch.from_numpy(fr['sensetivity'][:])
-                sensetivity = sensetivity[slice_idx]
+            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
         except IndexError as e: 
             print(f'os error: {e}')
-            self.create_new_espirit_map(fs_file, 'cuda')
-            with h5py.File(sense_file, 'r') as fr: 
-                # DATA SHAPE [z, c, y, x]
-                sensetivity = torch.from_numpy(fr['sensetivity'][:])
-
+            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
         except:
             print(f"ERROR")
             print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")

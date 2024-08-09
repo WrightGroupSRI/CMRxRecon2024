@@ -9,25 +9,24 @@
 # Date: April 27, 2024
 ###############################################################
 
+import pytorch_lightning
 
+from .smaps import maps
 import numpy as np
-from cmrxrecon.dl.basis_denoiser_spatial import SpatialDenoiser
-from cmrxrecon.dl.basis_denoiser_temporal import TemporalDenoiser
-from cmrxrecon.dl.lowrank_solver import LowRankSolver
+from cmrxrecon.dl.lowrank_varnet import LowRankLightning
 import torch
 from cmrxrecon.espirit import espirit
 from cmrxrecon.utils import ifft_2d_img, root_sum_of_squares
 from torchvision.transforms import Compose
 from cmrxrecon.dl.AllContrastDataModule import NormalizeKSpace, ZeroPadKSpace
 
-SPATIAL_DENOISER_PATH = '/home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-07_09_spatial_epoch=32-val/loss=0.78-val/ssim=0.67.ckpt'
-TEMPORAL_DENOISER_PATH = '/home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-07_11_temporal_epoch=29-val/loss=0.15-val/ssim=0.00.ckpt'
+SPATIAL_DENOISER_PATH = '/home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-07_13_lowrank_epoch=9-val/loss=0.00-val/ssim=0.91-v1.ckpt'
 
 
 def calc_espirit(bart_kspace, device):
     maps = []
     for i in range(bart_kspace.shape[0]):
-        map = (espirit(bart_kspace[[i], 0, ...].permute(0, 2, 3, 1).to(device), 5, 16, 0.0001, 0.99, device))
+        map = espirit(bart_kspace[[i], 0, ...].permute(0, 2, 3, 1).to(device), 5, 16, 0.0001, 0.99, device)
         maps.append(map.permute(0, 3, 1, 2))
     maps = torch.cat(maps, 0)
     return maps
@@ -37,39 +36,34 @@ def lowrank(kspace: np.ndarray, mask=None, device='cpu', lambda_reg=1e-1):
 
     [sht, shz, shc, shy, shx] = kspace.shape
 
-    # this is now x, y, z, c, t
-    bart_kspace = np.transpose(kspace, (4, 3, 1, 2, 0))
-    mask = bart_kspace != 0
-    try:
-        spatial_denoiser = SpatialDenoiser.load_from_checkpoint(checkpoint_path=SPATIAL_DENOISER_PATH)
-        temporal_denoiser = TemporalDenoiser.load_from_checkpoint(checkpoint_path=TEMPORAL_DENOISER_PATH)
-    except:
-        spatial_denoiser = SpatialDenoiser()
-        temporal_denoiser = TemporalDenoiser()
 
-    solver = LowRankSolver(spatial_denoiser=spatial_denoiser, temporal_denoiser=temporal_denoiser, lambda_reg=1e-1, cascades=5)
-    transforms = Compose([NormalizeKSpace(), ZeroPadKSpace()])
+    solver = LowRankLightning.load_from_checkpoint(SPATIAL_DENOISER_PATH)
+    norm = NormalizeKSpace()
+    pad = ZeroPadKSpace()
 
     solver.to(device)
     solver.eval()
-    bart_kspace = torch.from_numpy(bart_kspace).to(device)
+    kspace = torch.from_numpy(kspace)
 
     # kspace now z, t, c, h, w
-    bart_kspace = torch.permute(bart_kspace, (2, 4, 3, 0, 1))
+    kspace = torch.permute(kspace, (1, 0, 2, 3, 4))
+
+    # this is now x, y, z, c, t
+    mask = kspace != 0
     
-    # UPDATE FOR YOUR ESPIRIT CODE 
+    # estimate sense maps
     #maps = calc_espirit(bart_kspace, device)
     #maps = maps.unsqueeze(1)
+    #torch.save(maps, 'maps.pt')
     maps = torch.load('maps.pt')
 
-    print(maps.shape)
-    print(bart_kspace.shape)
     k_space = [] 
     mask = []
     padded_maps = []
 
-    for i in range(bart_kspace.shape[0]): 
-        values = transforms((bart_kspace[i], bart_kspace[i] != 0, maps[i]))
+    for i in range(kspace.shape[0]): 
+        values = norm((kspace[i], kspace[i] != 0, maps[i]))
+        values = pad(values)
         k_space.append(values[0])
         mask.append(values[1])
         padded_maps.append(values[2])
@@ -83,10 +77,12 @@ def lowrank(kspace: np.ndarray, mask=None, device='cpu', lambda_reg=1e-1):
         recon_k_space = solver(k_space, k_space != 0, padded_maps)
 
     # z, t, y, x
-    recon_images = root_sum_of_squares(ifft_2d_img(recon_k_space), 2)
+    recon_images = root_sum_of_squares(ifft_2d_img(recon_k_space), coil_dim=2)
 
     # t, z, y, x
     recon_images = recon_images.permute(1, 0, 2, 3)
+    print(recon_images.shape)
+    
 
     return recon_images.cpu().numpy()
 
@@ -96,7 +92,7 @@ import matplotlib
 matplotlib.use('Agg')
 from torchvision.utils import make_grid
 if __name__ == '__main__':
-    file = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/ValidationSet/UnderSample_Task2/P001/aorta_sag_kus_ktGaussian24.mat'
+    file = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/ValidationSet/UnderSample_Task2/P001/aorta_sag_kus_ktGaussian8.mat'
     data = None
     with h5py.File(file, 'r') as fr: 
         data = fr['kus'][:]
@@ -104,7 +100,7 @@ if __name__ == '__main__':
     data = data['real'] + 1j * data['imag']
 
     recon = lowrank(data, mask=None, device='cuda')
-    plt.imshow(make_grid(torch.from_numpy(recon[:, [0], :, :]))[0])
-    plt.savefig('lowrank')
+    plt.imshow(make_grid(torch.from_numpy(recon[:, [0], :, :]), nrow=3)[0], cmap='gray', vmax=recon[:, [0], :, :].max()/4)
+    plt.savefig('lowrank_recon')
 
 

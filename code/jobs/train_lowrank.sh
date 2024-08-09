@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=3
-#SBATCH --gpus-per-node=4
+#SBATCH --gpus-per-node=t4:4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --mem=80G
+#SBATCH --mem=180G
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=lowrank-%j.out
@@ -33,4 +33,4 @@ srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --batch_size 2 \
     --model lowrank \
     --lr 1e-3 \
-    #--checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/last-v3.ckpt
+    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-07_13_lowrank_epoch=9-val/loss=0.00-val/ssim=0.91-v1.ckpt

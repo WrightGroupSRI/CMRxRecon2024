@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --cpus-per-task=5
-#SBATCH --gpus-per-node=4
+#SBATCH --cpus-per-task=3
+#SBATCH --gpus-per-node=t4:4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
-#SBATCH --mem=250G
+#SBATCH --mem=180G
 #SBATCH --account=def-mchiew
 #SBATCH --time=12:00:00
 #SBATCH --output=spatial-%j.out
@@ -29,11 +29,11 @@ export WANDB_INIT_TIMEOUT=600
 
 
 wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
-wandb online
+wandb offline
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --num_workers 5 \
-    --batch_size 5 \
+    --batch_size 3 \
     --model spatial \
     --lr 1e-3 \
-    #--checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/last-v5.ckpt
+    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-08_16_spatial_epoch=11-val/loss=0.22-val/ssim=0.78.ckpt

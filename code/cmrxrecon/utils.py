@@ -2,19 +2,17 @@ import torch
 import einops
 from torch.fft import ifftshift, fftshift, ifft2, fft2
 
-def complex_to_real(images: torch.Tensor):
-    assert images.is_complex(), 'Channel dimension should be at least 2'
-    # images dims [B, C, H, W, complex]
-    images = torch.view_as_real(images)
-    images = einops.rearrange(images, 'b c h w cm -> b (cm c) h w')
-    return images
+def view_as_real(data): 
+    shape = data.shape
+    real_data = torch.view_as_real(data)
+    real_data = real_data.contiguous().reshape(shape[0], shape[1]*2, *shape[2:])
+    return real_data
 
-def real_to_complex(images: torch.Tensor):
-    assert images.shape[1] >= 2, 'Channel dimension should be at least 2'
-    images = einops.rearrange(images, 'b (cm c) h w -> b c h w cm', cm=2)
-    images = images.contiguous()
-    images = torch.view_as_complex(images)
-    return images
+def view_as_complex(data):
+    shape = data.shape
+    data = data.contiguous().reshape(shape[0], shape[1]//2, *shape[2:], 2)
+    complex_data = torch.view_as_complex(data)
+    return complex_data
 
 def root_sum_of_squares(data: torch.Tensor, coil_dim=0):
     return torch.sqrt(data.abs().pow(2).sum(coil_dim) + 1e-6)
