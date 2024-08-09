@@ -45,7 +45,11 @@ def main(args):
         case "vn":
             recon_func = cxr.recon
         case "ours":
-            recon_func = cxr.lowrank
+            e2e = True
+            if e2e:
+                recon_func = cxr.lowrank_e2e
+            else:
+                raise NotImplementedError
 
     match args.challenge:
         case "training":
@@ -129,23 +133,28 @@ def main(args):
                                         masked_kspace[:, i, j, :, :] *= mask
 
                             print("KSP MASK", masked_kspace.shape)
-                            img = recon_func(kspace=masked_kspace, mask=mask, device=device)
 
 
                             if "Uniform" in m:
 
                                 R = m.split(".mat")[0].split("Uniform")[-1]
 
-                                fname = f"{prefix}_kus_Uniform{R}"
+                                fname = f"{prefix}_kus_Uniform{R}.mat"
 
                             else:
 
                                 SamplingR = m.split(".mat")[0].split("kt")[-1]
 
-                                fname = f"{prefix}_kus_kt{SamplingR}"
+                                fname = f"{prefix}_kus_kt{SamplingR}.mat"
 
                             dest_path = os.path.join(pt_dir_output, fname)
-                            writecfl(dest_path, img)
+
+                            if os.path.exists(dest_path):
+                                continue
+
+                            img = recon_func(kspace=masked_kspace, mask=mask, device=device)
+
+                            # writecfl(dest_path, img)
                             # fix naming conventions
                             writemat(key="img4ranking", data=img, path=dest_path)
 
@@ -157,14 +166,18 @@ def main(args):
 
                         masked_kspace = kspace
 
-                        img = recon_func(masked_kspace, sp_device, weights_dir=args.weights_dir)
 
                         fname = mat_file.split("/")[-1].split(".mat")[0]
-                        dest_path = os.path.join(pt_dir_output, fname)
+                        dest_path = os.path.join(pt_dir_output, fname + ".mat")
 
-                        writecfl(dest_path, run4Ranking(img, fname)) # debugging
+                        if os.path.exists(dest_path):
+                            continue
+
+                        img = recon_func(masked_kspace, device, weights_dir=args.weights_dir)
+
+                        # writecfl(dest_path, run4Ranking(img, fname)) # debugging
                         # fix naming conventions
-                        writemat(key="img4ranking", data=run4Ranking(img, fname), path=dest_path)
+                        writemat(key="img4ranking", data=np.transpose(run4Ranking(img, fname), axes=(3, 2, 1, 0)), path=dest_path)
 
                 # break # mat file
 

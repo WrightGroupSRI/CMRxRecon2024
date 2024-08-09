@@ -13,7 +13,7 @@
 import numpy as np
 from .bartutils import bart 
 
-from .smaps import maps
+from .smaps import calc_maps
 
 def bart_recon(kspace=None, mask=None, command=None, sp_device=None, **kwargs):
 
@@ -21,7 +21,7 @@ def bart_recon(kspace=None, mask=None, command=None, sp_device=None, **kwargs):
 
     bart_kspace = np.transpose(kspace, (4, 3, 1, 2, 0))
 
-    sens_maps = maps(bart_kspace)
+    sens_maps = calc_maps(bart_kspace)
 
     bart_recon_image = np.zeros((shx, shy, shz, sht), dtype=complex)
 

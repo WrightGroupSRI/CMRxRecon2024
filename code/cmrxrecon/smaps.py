@@ -14,7 +14,7 @@ import numpy as np
 from .bartutils import bart
 
 # Function to estimate maps 
-def maps(kspace=None, mask=None):
+def calc_maps(kspace=None, mask=None):
 
     [shx, shy, shz, shc, sht] = np.shape(kspace)
 
