@@ -28,6 +28,8 @@ RUN pip install -r /requirements.txt
 # Copy the code directory to /app
 COPY code /app
 
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 # DO NOT EDIT THE FLLOWING LINES
 COPY *_run.py /
 COPY submitter.json /

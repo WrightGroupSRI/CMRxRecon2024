@@ -18,6 +18,7 @@ from cmrxrecon.utils import ifft_2d_img, root_sum_of_squares
 from torchvision.transforms import Compose
 from cmrxrecon.dl.AllContrastDataModule import NormalizeKSpace, ZeroPadKSpace
 from .smaps import calc_maps
+import copy
 
 def lowrank_e2e(kspace: np.ndarray, device, lambda_reg=1e-1, weights_dir=None):
     ######## NOT SURE THE MASK DIMENSIONS BUT ASSUMING [sht, shy, shx]
@@ -66,19 +67,17 @@ def lowrank_e2e(kspace: np.ndarray, device, lambda_reg=1e-1, weights_dir=None):
     padded_maps = torch.stack(padded_maps, dim=0).to(device)
     
     # solve for k-space
+    recon_k_space = copy.deepcopy(k_space)
     with torch.no_grad():
-        recon_k_space = solver(k_space, k_space != 0, padded_maps)
+        for i in range(recon_k_space.shape[0]):
+            recon_k_space[i, ...] = solver(k_space[[i], ...].cfloat(), k_space[[i], ...] != 0, padded_maps[[i], ...].cfloat())
 
     # z, t, y, x
     recon_images = root_sum_of_squares(ifft_2d_img(recon_k_space), coil_dim=2)
 
-    # t, z, y, x
-    recon_images = recon_images.permute(1, 0, 2, 3)
-    print(recon_images.shape)
-    
+    return np.transpose(recon_images.cpu().numpy(), (3, 2, 0, 1))
 
-    return recon_images.cpu().numpy()
-
+"""
 import h5py
 import matplotlib.pyplot as plt
 import matplotlib
@@ -95,5 +94,5 @@ if __name__ == '__main__':
     recon = lowrank(data, mask=None, device='cuda')
     plt.imshow(make_grid(torch.from_numpy(recon[:, [0], :, :]), nrow=3)[0], cmap='gray', vmax=recon[:, [0], :, :].max()/4)
     plt.savefig('lowrank_recon')
-
+"""
 

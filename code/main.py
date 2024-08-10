@@ -12,6 +12,7 @@
 
 import numpy as np
 import torch
+import gc
 
 import os
 import sys
@@ -175,9 +176,13 @@ def main(args):
 
                         img = recon_func(masked_kspace, device, weights_dir=args.weights_dir)
 
-                        # writecfl(dest_path, run4Ranking(img, fname)) # debugging
+                        writecfl(dest_path, run4Ranking(img, fname)) # debugging
                         # fix naming conventions
                         writemat(key="img4ranking", data=np.transpose(run4Ranking(img, fname), axes=(3, 2, 1, 0)), path=dest_path)
+
+                        del img
+                        torch.cuda.empty_cache()
+                        gc.collect()
 
                 # break # mat file
 
