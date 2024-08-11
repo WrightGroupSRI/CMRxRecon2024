@@ -19,11 +19,11 @@ def root_sum_of_squares(data: torch.Tensor, coil_dim=0):
 
 
 def pad_to_shape(tensor, target_shape):
-    _, _, x, y = tensor.shape
-    pad_x = (target_shape[0] - x) // 2
-    pad_y = (target_shape[1] - y) // 2
+    k_space_shape = tensor.shape
+    pad_x = (target_shape[0] - x.shape[-1]) // 2
+    pad_y = (target_shape[1] - y.shape[-2]) // 2
     padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
-    original_size = (x, y)
+    original_size = (k_space_shape.shape[-1], k_space_shape.shape[-2])
     padded_tensor = torch.nn.functional.pad(tensor, padding, "constant", 0)
     return padded_tensor, original_size
 
