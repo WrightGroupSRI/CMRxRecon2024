@@ -31,7 +31,7 @@ def crop_to_shape(tensor, original_size):
     _, _, x, y = tensor.shape
     diff_x = (x - original_size[0])//2
     diff_y = (y - original_size[1])//2
-    return tensor[:, :, diff_x:original_size[0] + diff_x, diff_y:original_size[1] + diff_y]
+    return tensor[..., diff_x:original_size[0] + diff_x, diff_y:original_size[1] + diff_y]
 
 def fft_2d_img(x, axes=[-1, -2]): 
     return fftshift(fft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)
