@@ -55,13 +55,15 @@ def lowrank_e2e(kspace: np.ndarray, device, lambda_reg=1e-1, weights_dir=None):
     mask = []
     padded_maps = []
 
-    scaling_factor = k_space.abs().amax((1, 2, 3, 4), keepdim=True)
+    scaling_factor = kspace.abs().amax((1, 2, 3, 4), keepdim=True)
 
     k_space, original_pad = pad_to_shape(kspace/scaling_factor, [256, 512])
     padded_maps, original_pad = pad_to_shape(maps, [256, 512])
+    padded_maps = padded_maps.to(device)
 
     # solve for k-space
     recon_k_space = copy.deepcopy(k_space)
+    k_space = k_space.to(device)
     with torch.no_grad():
         for i in range(recon_k_space.shape[0]):
             recon_k_space[i, ...] = solver(k_space[[i], ...].cfloat(), k_space[[i], ...] != 0, padded_maps[[i], ...].cfloat())
@@ -73,8 +75,7 @@ def lowrank_e2e(kspace: np.ndarray, device, lambda_reg=1e-1, weights_dir=None):
 
     return np.transpose(recon_images.cpu().numpy(), (3, 2, 0, 1))
 
-"""
-import h5py
+""" import h5py
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')

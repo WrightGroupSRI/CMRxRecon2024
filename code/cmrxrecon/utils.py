@@ -20,18 +20,18 @@ def root_sum_of_squares(data: torch.Tensor, coil_dim=0):
 
 def pad_to_shape(tensor, target_shape):
     k_space_shape = tensor.shape
-    pad_x = (target_shape[0] - k_space_shape[-1]) // 2
-    pad_y = (target_shape[1] - k_space_shape[-2]) // 2
-    padding = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
-    original_size = (k_space_shape.shape[-1], k_space_shape.shape[-2])
+    pad_x = (target_shape[1] - k_space_shape[-1]) // 2
+    pad_y = (target_shape[0] - k_space_shape[-2]) // 2
+    padding = (pad_x, pad_x, pad_y, pad_y)  # (left, right, top, bottom)
+    original_size = (k_space_shape[-1], k_space_shape[-2])
     padded_tensor = torch.nn.functional.pad(tensor, padding, "constant", 0)
     return padded_tensor, original_size
 
 def crop_to_shape(tensor, original_size):
-    _, _, x, y = tensor.shape
-    diff_x = (x - original_size[0])//2
-    diff_y = (y - original_size[1])//2
-    return tensor[..., diff_x:original_size[0] + diff_x, diff_y:original_size[1] + diff_y]
+    tensor_shape = tensor.shape
+    diff_x = (tensor_shape[-1] - original_size[0])//2
+    diff_y = (tensor_shape[-2] - original_size[1])//2
+    return tensor[..., diff_y:original_size[1] + diff_y, diff_x:original_size[0] + diff_x]
 
 def fft_2d_img(x, axes=[-1, -2]): 
     return fftshift(fft2(ifftshift(x, dim=axes), dim=axes, norm='ortho'), dim=axes)
