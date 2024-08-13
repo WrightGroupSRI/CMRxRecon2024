@@ -32,6 +32,8 @@ def bart_recon(kspace=None, mask=None, command=None, sp_device=None, **kwargs):
 
         bart_recon_kspace = np.expand_dims(bart_slice_kspace, axis=-2)
 
+        print(bart_recon_kspace.shape)
+
         bart_maps = np.expand_dims(sens_maps[:, :, i, :], axis=0)
 
         aux_recon = bart(1, command, bart_recon_kspace, bart_maps)

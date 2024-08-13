@@ -41,6 +41,8 @@ def main(args):
             recon_func = cxr.itsense_recon
         case "cs":
             recon_func = cxr.espirit_recon
+        case "tcs":
+            recon_func = cxr.temporal_espirit_recon
         case "unet":
             recon_func = cxr.unet_recon
         case "vn":
@@ -171,8 +173,8 @@ def main(args):
                         fname = mat_file.split("/")[-1].split(".mat")[0]
                         dest_path = os.path.join(pt_dir_output, fname + ".mat")
 
-                        if os.path.exists(dest_path):
-                            continue
+                        #if os.path.exists(dest_path):
+                        #    continue
 
                         img = recon_func(masked_kspace, device, weights_dir=args.weights_dir)
 
