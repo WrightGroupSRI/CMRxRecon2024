@@ -14,25 +14,33 @@ from torchvision.utils import make_grid
 
 
 class SpatialDenoiser(pl.LightningModule):
-    def __init__(self, lr=1e-3, single_channel=False):
+    def __init__(self, lr=1e-3, single_channel=False, is_complex=False):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
         self.single_channel = single_channel
-        if single_channel:
-            self.model = Unet(2, 2, chans=64)
-        else:
-            self.model = Unet(6, 6, chans=64)
+        self.train_complex = is_complex
+
+        input_channels = 2
+        if not is_complex: 
+            input_channels = 1
+        if not single_channel: 
+            input_channels = input_channels * 3
+        self.model = Unet(input_channels, input_channels, chans=64)
+
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss((x), (y))
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
+    def pass_through_model(self, batch):
         undersampled, fully_sampled, sense = batch
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
-        #spatial_basis, mean, std = self.norm(spatial_basis)
         spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
-
-        spatial_basis = view_as_real(spatial_basis)
+        
+        if self.train_complex:
+            spatial_basis = view_as_real(spatial_basis)
+        else:
+            estimate_phase = torch.angle(spatial_basis)
+            spatial_basis = torch.abs(spatial_basis)
 
         b, sv, h, w = spatial_basis.shape
         if self.single_channel: 
@@ -45,16 +53,60 @@ class SpatialDenoiser(pl.LightningModule):
             denoised_spatial = denoised_spatial.reshape(b, sv, h, w)
             spatial_basis = spatial_basis.reshape(b, sv, h, w)
         
+        # estimate fully sampled bases
         fully_sampled_images = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
         fully_sampled_images[torch.isnan(fully_sampled_images)] = 0
         _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_images)
         gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
-        #gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
-        gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
+        if self.train_complex:
+            gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
+        else:
+            gt_phase = torch.angle(gt_spatial_basis)
+            gt_spatial_basis = torch.abs(gt_spatial_basis)
 
-        ssim = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
+        
+        if self.train_complex:
+            denoised_spatial = view_as_complex(denoised_spatial)
+            gt_spatial_basis = view_as_complex(gt_spatial_basis)
+            spatial_basis = view_as_complex(spatial_basis)
+        else:
+            denoised_spatial = torch.exp(estimate_phase * 1j) * denoised_spatial
+            gt_spatial_basis = torch.exp(gt_phase * 1j) * gt_spatial_basis
+            spatial_basis = torch.exp(estimate_phase * 1j) * spatial_basis
+
+        return (spatial_basis, denoised_spatial, gt_spatial_basis)
+
+
+    def calculate_loss(self, estimate, ground_truth): 
+        ssim = metrics.calculate_ssim(view_as_real(estimate), view_as_real(ground_truth), self.device)
         ssim_loss = (1  - ssim ) 
-        l1_loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
+        l1_loss = self.loss_fn(view_as_real(estimate), view_as_real(ground_truth))
+        return ssim_loss, l1_loss
+
+    def plot_bases(self, spatial_basis, denoised_spatial, gt_spatial_basis, sense, label='train'): 
+        grid = self.prepare_images(denoised_spatial.abs(), gt_spatial_basis.abs().max()/2)
+        self.logger.log_image(label + "/estimate_bases", [wandb.Image(grid, caption="Validation Ground Truth Images")])
+        # imgs [b, t, h, w]
+        grid = self.prepare_images(gt_spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
+        self.logger.log_image(label + "/gt_spatial_bases", [wandb.Image(grid, caption="Estimated Images")])
+
+        grid = self.prepare_images(spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
+        self.logger.log_image(label + "/zero_filled", [wandb.Image(grid, caption="Zero filled images")])
+        
+        # [b, t, s, h, w]
+        plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
+        grid = make_grid(plot_sense.abs())
+        self.logger.log_image(label + "/sense_maps", [wandb.Image(grid, caption="sense")])
+
+        grid = make_grid(plot_sense.angle())
+        self.logger.log_image(label + "/sense_maps_angle", [wandb.Image(grid, caption="sense")])
+
+
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
+        spatial_basis, denoised_spatial, gt_spatial_basis = self.pass_through_model(batch)
+
+        ssim_loss, l1_loss = self.calculate_loss(denoised_spatial, gt_spatial_basis)
+
         loss = ssim_loss + l1_loss
 
         self.log('train/ssim_loss', ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
@@ -63,55 +115,16 @@ class SpatialDenoiser(pl.LightningModule):
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
-                denoised_spatial = view_as_complex(denoised_spatial)
-                gt_spatial_basis = view_as_complex(gt_spatial_basis)
-                spatial_basis = view_as_complex(spatial_basis)
-                
-                #gt_spatial_basis = self.unnorm(gt_spatial_basis, mean, std)
-                #denoised_spatial = self.unnorm(denoised_spatial, mean, std)
-                #spatial_basis = self.unnorm(spatial_basis, mean, std)
-
-                grid = self.prepare_images(denoised_spatial.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("train/estimate_bases", [wandb.Image(grid, caption="Validation Ground Truth Images")])
-                # imgs [b, t, h, w]
-                grid = self.prepare_images(gt_spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("train/gt_spatial_bases", [wandb.Image(grid, caption="Estimated Images")])
-
-                grid = self.prepare_images(spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("train/zero_filled", [wandb.Image(grid, caption="Zero filled images")])
-                
-                # [b, t, s, h, w]
-                plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
-
-                grid = make_grid(plot_sense.abs())
-                self.logger.log_image("train/sense_maps", [wandb.Image(grid, caption="sense")])
-
-                grid = make_grid(plot_sense.angle())
-                self.logger.log_image("train/sense_maps_angle", [wandb.Image(grid, caption="sense")])
+                self.plot_bases(spatial_basis, denoised_spatial, gt_spatial_basis, batch[2], label='train')
 
         return loss
 
 
     def validation_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
-        
-        spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
-        #spatial_basis, mean, std = self.norm(spatial_basis)
-        spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
-        spatial_basis = view_as_real(spatial_basis)
+        spatial_basis, denoised_spatial, gt_spatial_basis = self.pass_through_model(batch)
 
-        output = self.model(spatial_basis)
-        denoised_spatial = spatial_basis + output
-        
-        fully_sampled_image = (ifft_2d_img(fully_sampled)* sense.conj()).sum(2) / (sense.conj() * sense + 1e-6).sum(2)
-        _, gt_spatial_basis = self.get_singular_vectors(fully_sampled_image)
-        #gt_spatial_basis, _, _ = self.norm(gt_spatial_basis)
-        gt_spatial_basis = gt_spatial_basis / gt_spatial_basis.abs().amax((-1, -2), keepdim=True)
-        gt_spatial_basis = view_as_real(gt_spatial_basis.resolve_conj())
-
-        ssim_loss = metrics.calculate_ssim(denoised_spatial, gt_spatial_basis, self.device)
-        l1_loss = self.loss_fn(denoised_spatial, gt_spatial_basis)
-        loss = l1_loss + (1 - ssim_loss) 
+        ssim_loss, l1_loss = self.calculate_loss(denoised_spatial, gt_spatial_basis)
+        loss = ssim_loss + l1_loss
 
         self.log('val/ssim', ssim_loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
         self.log('val/l1_loss', l1_loss, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
@@ -121,31 +134,7 @@ class SpatialDenoiser(pl.LightningModule):
 
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
-                denoised_spatial = view_as_complex(denoised_spatial)
-                gt_spatial_basis = view_as_complex(gt_spatial_basis)
-                spatial_basis = view_as_complex(spatial_basis)
-
-                #gt_spatial_basis = self.unnorm(gt_spatial_basis, mean, std)
-                #denoised_spatial = self.unnorm(denoised_spatial, mean, std)
-                #spatial_basis = self.unnorm(spatial_basis, mean, std)
-                
-                grid = self.prepare_images(denoised_spatial.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("val/estimate_bases", [wandb.Image(grid, caption="Validation Ground Truth Images")])
-                # imgs [b, t, h, w]
-                grid = self.prepare_images(gt_spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("val/gt_spatial_bases", [wandb.Image(grid, caption="Estimated Images")])
-
-                grid = self.prepare_images(spatial_basis.abs(), gt_spatial_basis.abs().max()/2)
-                self.logger.log_image("val/zero_filled", [wandb.Image(grid, caption="Zero filled images")])
-                
-                # [b, t, s, h, w]
-                plot_sense = sense[0, 0, :, :, :].unsqueeze(1)
-
-                grid = make_grid(plot_sense.abs())
-                self.logger.log_image("val/sense_maps", [wandb.Image(grid, caption="sense")])
-
-                grid = make_grid(plot_sense.angle())
-                self.logger.log_image("train/sense_maps_angle", [wandb.Image(grid, caption="sense")])
+                self.plot_bases(spatial_basis, denoised_spatial, gt_spatial_basis, batch[2], label='val')
                 
         return loss
         
@@ -188,7 +177,7 @@ class SpatialDenoiser(pl.LightningModule):
         grid = make_grid(imgs, normalize=True, value_range=(0, max_val), nrow=3)
         return grid
 
-    def estimate_inital_bases(self, reference_k, sense_maps, mask):
+    def estimate_inital_bases(self, reference_k, sense_maps, mask) -> Tuple[torch.Tensor, torch.Tensor]:
         masked_k = self.get_center_masked_k_space(reference_k) 
         masked_k = (ifft_2d_img(masked_k) * sense_maps.conj()).sum(2) / (sense_maps * sense_maps.conj() + 1e-6).sum(2)
         masked_k[torch.isnan(masked_k)] = 0

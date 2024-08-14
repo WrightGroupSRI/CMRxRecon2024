@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=2
 #SBATCH --gpus-per-node=t4:4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -29,8 +29,7 @@ wandb login 536e03500f10b21a872da7b786ab009c9e9320ac
 wandb offline
 
 srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
-    --num_workers 3 \
-    --batch_size 2 \
+    --num_workers 2 \
+    --batch_size 1 \
     --model lowrank \
     --lr 1e-3 \
-    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-07_13_lowrank_epoch=9-val/loss=0.00-val/ssim=0.91-v1.ckpt

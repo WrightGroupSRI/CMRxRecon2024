@@ -240,7 +240,7 @@ class LowRankModl(nn.Module):
         estimated_k_space = fft_2d_img(coil_images)
         
         #only estimate k-space locations that are unsampled
-        return estimated_k_space
+        return estimated_k_space * ~mask + reference_k
 
 
 """

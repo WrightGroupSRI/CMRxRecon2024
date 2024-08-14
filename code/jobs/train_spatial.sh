@@ -36,4 +36,4 @@ srun python /home/kadotab/python/CMRxRecon2024/code/train.py \
     --batch_size 3 \
     --model spatial \
     --lr 1e-3 \
-    --checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-08_16_spatial_epoch=11-val/loss=0.22-val/ssim=0.78.ckpt
+    #--checkpoint /home/kadotab/scratch/cmrxrecon_checkpoints/2024-08-09_10_spatial_epoch=17-val/loss=0.25-val/ssim=0.75.ckpt

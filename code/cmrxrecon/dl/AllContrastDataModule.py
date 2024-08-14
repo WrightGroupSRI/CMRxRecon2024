@@ -1,12 +1,13 @@
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader, random_split
-import torch 
-from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
-from torchvision.transforms import Compose
-from cmrxrecon.utils import fft_2d_img, ifft_2d_img
 import math
+import pytorch_lightning as pl
+
+import torch 
+from torch.utils.data import DataLoader, random_split
+from torchvision.transforms import Compose
 import torch.nn.functional as F
 
+from cmrxrecon.dl.dataloaders.AllContrastDataset import AllContrastDataset
+from cmrxrecon.dl.dataloaders.SliceDataset import SliceDataset
 
 
 class AllContrastDataModule(pl.LightningDataModule):
@@ -22,14 +23,19 @@ class AllContrastDataModule(pl.LightningDataModule):
         all_contrast_full = AllContrastDataset(
                 self.data_dir, 
                 train=True,
-                transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]),
                 task_one=False,
                 file_extension=self.file_extension
                 )
 
-        self.all_contrast_train, self.all_contrast_val, self.all_contrast_test = random_split(
-            all_contrast_full, [0.8, 0.1, 0.1], generator=torch.Generator().manual_seed(42)
+        self.all_contrast_train, self.all_contrast_val = random_split(
+            all_contrast_full, [0.9, 0.1], generator=torch.Generator().manual_seed(42)
         )
+        print(f'Train dataset has {len(self.all_contrast_train)} volumes')
+        print(f'Val dataset has {len(self.all_contrast_val)} volumes')
+        self.all_contrast_train = SliceDataset(self.all_contrast_train, transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]))
+        self.all_contrast_val = SliceDataset(self.all_contrast_val, transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]))
+        print(f'Train dataset has {len(self.all_contrast_train)} slices')
+        print(f'Val dataset has {len(self.all_contrast_val)} slices')
 
 
 
@@ -51,15 +57,6 @@ class AllContrastDataModule(pl.LightningDataModule):
                 pin_memory=True,
                 collate_fn=collate_fn, 
                 shuffle=False
-                )
-
-    def test_dataloader(self):
-        return DataLoader(
-                self.all_contrast_test, 
-                batch_size=self.batch_size, 
-                num_workers=self.num_workers, 
-                pin_memory=True,
-                collate_fn=collate_fn
                 )
 
 
@@ -92,10 +89,7 @@ class ZeroPadKSpace(object):
         under = self.pad_to_shape(under, [256, 512])
         fully_sampled = self.pad_to_shape(fully_sampled, [256, 512])
         sense = self.linear_interpolator(sense)
-        #sense = ifft_2d_img(self.pad_to_shape(fft_2d_img(sense), [256, 512]))
         mask = sense[0, 0, :, :] != 0
-        #mask = sense[0, 0, :, :].abs() > 1e-2
-        #sense = mask * sense
         scaling = (sense[:, :, mask].conj() * sense[:, :, mask]).sum(1)
         sense[:, :, mask] = sense[:, :, mask]/torch.sqrt(scaling)
         return under, fully_sampled, sense

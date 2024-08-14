@@ -6,6 +6,7 @@ from cmrxrecon.dl.basis_denoiser_temporal import TemporalDenoiser
 from cmrxrecon.dl.AllContrastDataModule import AllContrastDataModule
 from cmrxrecon.dl.BasisDataModule import BasisDataLoader
 from cmrxrecon.dl.SelfSupervsiedDataModule import SelfSupervisedDataModule
+import matplotlib.pyplot as plt
 import argparse
 from datetime import timedelta, datetime
 
@@ -41,7 +42,7 @@ def main(args):
     #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".h5")
     if args.model == 'lowrank':
-        model = LowRankLightning(cascades=5, unet_chans=64, lr=args.lr)
+        model = LowRankLightning(cascades=5, unet_chans=18, lr=args.lr)
         if args.checkpoint_path: 
             model = LowRankLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'varnet':

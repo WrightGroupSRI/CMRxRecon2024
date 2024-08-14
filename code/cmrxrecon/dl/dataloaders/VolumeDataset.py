@@ -16,7 +16,7 @@ class PatientFile:
     sensetivities: str
     slices: int
 
-class MRIDataset(Dataset):
+class VolumeDataset(Dataset):
     """Volume dataset for MICCAI 2024 challenge. 
     """
 
@@ -53,30 +53,8 @@ class MRIDataset(Dataset):
         self.transforms = transforms
         self.train = train
         self.task_one = task_one
+        target_directory = self.setup_paths(directory)
         
-        if self.train:
-            directory = os.path.join(directory, 'TrainingSet') # add trailing slash if not there
-        else:
-            directory = os.path.join(directory, 'ValidationSet') # add trailing slash if not there
-
-        # Set up paths based on task and train/validation
-        if self.train:
-            target_direcory = os.path.join(directory, 'FullSample') 
-        else:
-            if task_one:
-                target_direcory = os.path.join(directory,'UnderSample_Task1')
-            else:
-                target_direcory = os.path.join(directory,'UnderSample_Task2')
-
-        # get all volume files from target directory
-        self.target_files = os.listdir(target_direcory)
-
-        # select directory based on task
-        if task_one:
-            self.mask_dir = os.path.join(directory, 'Mask_Task1')
-        else:
-            self.mask_dir = os.path.join(directory, 'Mask_Task2')
-
         # populate list of patient files
         self.file_list:List[PatientFile] = []
         print(f'Counting Slices in {file_prefix}')
@@ -87,11 +65,11 @@ class MRIDataset(Dataset):
                 file_name =  file_prefix + self.file_extension
             else:
                 file_name = file_prefix + '_kus_Uniform' + acceleration_factor + '.h5'
-            fs_file = os.path.join(target_direcory, file, file_name)
+            fs_file = os.path.join(target_directory, file, file_name)
 
             if not os.path.exists(fs_file):
                 continue
-            sense_file = os.path.join(target_direcory, file, file_prefix + '_sensetivites.h5') 
+            sense_file = os.path.join(target_directory, file, file_prefix + '_sensetivites.h5') 
             
             if task_one:
                 mask_file = file_prefix + '_mask_Uniform' + acceleration_factor + '.h5' 
@@ -101,14 +79,19 @@ class MRIDataset(Dataset):
                 mask_files = os.listdir(os.path.join(self.mask_dir, file))
                 mask_files = [os.path.join(self.mask_dir, file, mask_file) for mask_file in mask_files if '.h5' in mask_file and file_prefix in mask_file]
             try:
+                slices = None
                 with h5py.File(fs_file, 'r') as fr:
                     # DATA SHAPE [t, z, c, y, x]
                     if self.train:
-                        slices = (fr['kspace_full'].shape[0])
+                        slices = fr['kspace_full'].shape[0]
                     else: 
                         slices = fr['kus'].shape[0]
+                assert slices != None
+
             except Exception as e: 
                 print(f'could not open {fs_file} with error {e}')
+                raise
+
             if all_data:  
                 for mask in mask_files: 
                     self.file_list.append(
@@ -120,15 +103,41 @@ class MRIDataset(Dataset):
                 )
                 
         print(f'Found {sum(patient.slices for patient in self.file_list)} slices!')
+        print(f'Found {len(self.file_list)} Volumes!')
+
+    def setup_paths(self, directory):
+        if self.train:
+            directory = os.path.join(directory, 'TrainingSet') # add trailing slash if not there
+        else:
+            directory = os.path.join(directory, 'ValidationSet') # add trailing slash if not there
+
+        # Set up paths based on task and train/validation
+        if self.train:
+            target_direcory = os.path.join(directory, 'FullSample') 
+        else:
+            if self.task_one:
+                target_direcory = os.path.join(directory,'UnderSample_Task1')
+            else:
+                target_direcory = os.path.join(directory,'UnderSample_Task2')
+
+        # get all volume files from target directory
+        self.target_files = os.listdir(target_direcory)
+        self.target_files.sort()
+
+        # select directory based on task
+        if self.task_one:
+            self.mask_dir = os.path.join(directory, 'Mask_Task1')
+        else:
+            self.mask_dir = os.path.join(directory, 'Mask_Task2')
+        return target_direcory
+
     
     def __len__(self):
-        return sum(patient.slices for patient in self.file_list)
+        return len(self.file_list)
 
 
     def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
-        vol_idx, slice_idx = self.get_vol_slice_index(index)
-        
-        subject_files = self.file_list[vol_idx]
+        subject_files = self.file_list[index]
 
         fs_file = subject_files.fully_sampled
         sense_file = subject_files.sensetivities
@@ -147,9 +156,9 @@ class MRIDataset(Dataset):
             with h5py.File(fs_file, 'r') as fr:
                 # DATA SHAPE [z, t, c, y, x]
                 if self.train:
-                    k_space = (fr['kspace_full'][slice_idx])
+                    k_space = (fr['kspace_full'][:])
                 else: 
-                    k_space = (fr['kus'][slice_idx])
+                    k_space = (fr['kus'][:])
 
             if not validation:
                 with h5py.File(mask_file, 'r') as fr:
@@ -159,7 +168,7 @@ class MRIDataset(Dataset):
                 with h5py.File(sense_file, 'r') as fr: 
                     # DATA SHAPE [z, c, y, x]
                     sensetivity = torch.from_numpy(fr['sensetivity'][:])
-                    sensetivity = sensetivity[slice_idx]
+                    sensetivity = sensetivity[:]
                     sensetivity[0] = sensetivity[0].abs()
         except OSError as e: 
             print(f'os error: {e}')
@@ -183,9 +192,6 @@ class MRIDataset(Dataset):
 
         
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
-        if k_space.shape[0] == 1:
-            print('only found one time dimension')
-            k_space = k_space.repeat(3, 1, 1, 1)
         sensetivity = sensetivity.unsqueeze(0)
 
         mask = mask.unsqueeze(1)
@@ -196,61 +202,17 @@ class MRIDataset(Dataset):
         
         if self.transforms: 
             training_sample = self.transforms(training_sample)
+
         return training_sample 
 
 
-    def get_vol_slice_index(self, index) -> Tuple[int, int]:
-        slices = [patient.slices for patient in self.file_list]
-        cumulative_sum = np.cumsum(slices)
-        volume_index = np.where(cumulative_sum > index)[0][0]
-        # get the slice index
-        if volume_index > 0:
-            slice_index = index - cumulative_sum[volume_index - 1] 
-        else: 
-            slice_index = index
-        return volume_index, slice_index
 
 
-    def create_new_espirit_map(self, file, device):
-        try:
-            with h5py.File(file, 'r') as fr: 
-                print(file)
-                if 'validation' in file.lower():
-                    key = 'kus'
-                else:
-                    key = 'kspace_full'
-                    
-                k_space = fr[key][:]
-                k_space = k_space['real'] + 1j* k_space['imag']
-                k_space = torch.from_numpy(k_space)
-
-            with torch.no_grad():
-                maps = []
-                for split in torch.split(k_space, 1, dim=0):
-                    map = espirit(split[:, 0, ...].permute(0, 2, 3, 1).to(device), 8, 16, 0.001, 0.99, device)
-                    maps.append(map.permute(0, 3, 1, 2))
-
-                maps = torch.concat(maps)
-                print("sensetivity", maps.shape)
-                
-                dirname = os.path.dirname(file)
-                basename = os.path.basename(file)
-                patient_name = os.path.splitext(file)[0]
-
-                sense_map_name = patient_name + '_sensetivites.h5'
-
-                with h5py.File(os.path.join(dirname, sense_map_name), 'w') as fr: 
-                    print(fr.filename)
-                    fr.create_dataset('sensetivity', data=maps.cpu().numpy())
-        except OSError as e:
-            # Print the error message and the file name
-            print(f"OS error: {e}")
-            print(f"Error occurred in file: {file}")
 
 import matplotlib.pyplot as plt
 if __name__ == '__main__':
-    path = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Cine/'
-    dataset = MRIDataset(path, True, False, '4', 'cine_sax')
+    path = '/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/Aorta/'
+    dataset = VolumeDataset(path, False, True, '4', 'aorta_sag')
     x = dataset[0]
     print(x[0].shape)
     #fig, ax = plt.subplots(2, 1)

@@ -1,4 +1,5 @@
-from cmrxrecon.dl.dataloaders.MRIDataset import MRIDataset
+from cmrxrecon.dl.dataloaders.VolumeDataset import VolumeDataset
+from cmrxrecon.dl.dataloaders.SliceDataset import SliceDataset
 from torch.utils.data import Dataset
 import os
 import numpy as np
@@ -62,7 +63,7 @@ class AllContrastDataset(Dataset):
 
             for prefix in prefixes:
                 self.datasets.append(
-                       MRIDataset(
+                       VolumeDataset(
                            path, 
                            task_one=task_one, 
                            train=train,
@@ -74,8 +75,14 @@ class AllContrastDataset(Dataset):
                        )
         self.dataset_lengths = [len(dataset) for dataset in self.datasets]
 
+    @property
+    def file_list(self):
+        """The file_list property."""
+        return [file for dataset in self.datasets for file in dataset.file_list]
+
     def __len__(self):
         return sum(self.dataset_lengths)
+
 
     def get_dataset_index_and_index(self, index) -> Tuple[int, int]:
         cumulative_sum = np.cumsum(self.dataset_lengths)
@@ -91,32 +98,11 @@ class AllContrastDataset(Dataset):
         dataset_index, idx = self.get_dataset_index_and_index(index)
         return self.datasets[dataset_index][idx]
 
-
-@dataclass
-class Shape:
-    x: int
-    y: int
-    coils: int
-    t: int
-
 if __name__ == '__main__':
-    dataset = AllContrastDataset(
-            parent_dir='/home/kadotab/scratch/MICCAIChallenge2024/ChallengeData/MultiCoil/',
-            acceleration_factor='4', 
-            task_one=True,
-            train=True,
-            )
-    unique_shapes = []
-
-    all_shapes = torch.ones(len(dataset), 4)
-
-    for i, data in enumerate(dataset):
-        
-        all_shapes[i, :] = torch.tensor([data[0].shape[0], data[0].shape[1], data[0].shape[2], data[0].shape[3]])
-        if i > 50:
-            break
-
-    print(all_shapes.shape)
-    unique_rows = torch.unique(all_shapes, dim=0)
-    print(unique_rows)
-
+    from torch.utils.data import random_split
+    dataset = AllContrastDataset('/scratch/kadotab/MICCAIChallenge2024/ChallengeData/MultiCoil/')
+    train, val = random_split(dataset, [0.9, 0.1])
+    train_dataset = train
+    slice_dataset = SliceDataset(train, transforms=None)
+    for i in slice_dataset: 
+        pass
