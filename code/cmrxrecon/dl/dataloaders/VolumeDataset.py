@@ -52,6 +52,7 @@ class VolumeDataset(Dataset):
         self.file_extension = file_extension
         self.transforms = transforms
         self.train = train
+        self.file_prefix = file_prefix
         self.task_one = task_one
         target_directory = self.setup_paths(directory)
         
@@ -192,7 +193,7 @@ class VolumeDataset(Dataset):
 
         
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
-        sensetivity = sensetivity.unsqueeze(0)
+        sensetivity = sensetivity.unsqueeze(1)
 
         mask = mask.unsqueeze(1)
         if not validation:

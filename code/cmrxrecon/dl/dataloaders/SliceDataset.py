@@ -32,84 +32,33 @@ class SliceDataset(Dataset):
         super().__init__()
 
         self.transforms = transforms
-        self.volume_datset = dataset
+        self.volume_dataset = dataset
         
         self.slices = []
         if isinstance(dataset, Subset): 
             self.volume_index_lookup_table = []
             for subset_index in dataset.indices:
-                self.slices.append(self.volume_datset.dataset.file_list[subset_index].slices)
+                self.slices.append(self.volume_dataset.dataset.file_list[subset_index].slices)
                 self.volume_index_lookup_table.append(subset_index)
+        else:
+            for file in self.volume_dataset.file_list:
+                self.slices.append(file.slices)
 
-
+        
     def __len__(self):
         return sum(self.slices)
 
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         vol_idx, slice_idx = self.get_vol_slice_index(index)
-        if isinstance(self.volume_datset, Subset): 
+        if isinstance(self.volume_dataset, Subset): 
             vol_idx = self.volume_index_lookup_table[vol_idx]
-            file_list = self.volume_datset.dataset.file_list
-        else:
-            file_list = self.volume_datset.file_list
+            dataset = self.volume_dataset.dataset
+        else: 
+            dataset = self.volume_dataset
+        fully_sampled, under_sampled, sense = dataset[vol_idx]
         
-        subject_files = file_list[vol_idx]
-
-        fs_file = subject_files.fully_sampled
-        sense_file = subject_files.sensetivities
-        try:
-            index = torch.randint(len(subject_files.mask), size=(1,))
-            validation = False
-        except:
-            index = 0
-            validation = True
-
-        mask_file = subject_files.mask[index]
-
-        try:
-            with h5py.File(fs_file, 'r') as fr:
-                # DATA SHAPE [z, t, c, y, x]
-                k_space_key = 'kspace_full'
-
-                k_space:np.ndarray = fr[k_space_key][slice_idx]
-                k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
-
-            if not validation:
-                with h5py.File(mask_file, 'r') as fr:
-                    # DATA SHAPE [z, t, c, y, x]
-                    mask = torch.as_tensor(fr['mask'][:])
-
-                with h5py.File(sense_file, 'r') as fr: 
-                    # DATA SHAPE [z, c, y, x]
-                    sensetivity = torch.from_numpy(fr['sensetivity'][slice_idx])
-                    sensetivity = sensetivity[:]
-                    sensetivity[0] = sensetivity[0].abs()
-            else:
-                mask = k_space != 0
-                mask = mask[:, 0, :, :]
-                sensetivity = np.ones_like(k_space)
-                sensetivity = sensetivity[0, :, :, :]
-        except Exception as e:
-            print(f"ERROR")
-            print(e)
-            print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
-            raise e
-        
-        assert k_space != None
-        assert mask != None
-        assert sensetivity != None
-
-        assert isinstance(k_space, torch.Tensor)
-        assert isinstance(mask, torch.Tensor)
-        assert isinstance(sensetivity, torch.Tensor)
-        
-        # data shape [z, c, y , x]
-        mask = mask.bool()
-
-        sensetivity = sensetivity.unsqueeze(0)
-        mask = mask.unsqueeze(1)
-        training_sample = (k_space*mask, k_space, sensetivity)
+        training_sample = (fully_sampled[slice_idx], under_sampled[slice_idx], sense[slice_idx], {})
         
         if self.transforms: 
             training_sample = self.transforms(training_sample)
