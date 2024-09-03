@@ -36,13 +36,8 @@ class AllContrastDataModule(pl.LightningDataModule):
         self.all_contrast_train_slices = SliceDataset(self.all_contrast_train, transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]))
         self.all_contrast_val_slices = SliceDataset(self.all_contrast_val, transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]))
 
-        self.slice_datasets = {}
-        for dataset in self.all_contrast_train.dataset.datasets:
-            self.slice_datasets[dataset.file_prefix] = SliceDataset(dataset, transforms=Compose([NormalizeKSpace(), ZeroPadKSpace()]))
-
-
-        print(f'Train dataset has {len(self.all_contrast_train)} slices')
-        print(f'Val dataset has {len(self.all_contrast_val)} slices')
+        print(f'Train slice dataset has {len(self.all_contrast_train_slices)} slices')
+        print(f'Val slice dataset has {len(self.all_contrast_val_slices)} slices')
 
 
 

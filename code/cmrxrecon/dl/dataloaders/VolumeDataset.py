@@ -136,67 +136,71 @@ class VolumeDataset(Dataset):
     def __len__(self):
         return len(self.file_list)
 
+    def get_random_mask_file(self, files:PatientFile):
+        if self.train:
+            index = torch.randint(len(files.mask), size=(1,))
+            mask_file = files.mask[index]
+        else:
+            mask_file = ''
+        return mask_file
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
+
+    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         subject_files = self.file_list[index]
 
         fs_file = subject_files.fully_sampled
         sense_file = subject_files.sensetivities
-        try:
-            index = torch.randint(len(subject_files.mask), size=(1,))
-            mask_file = subject_files.mask[index]
-            validation = False
-        except:
-            index = 0
-            validation = True
+        mask_file = self.get_random_mask_file(subject_files)
 
         k_space: torch.Tensor
         mask: torch.Tensor
         sensetivity: torch.Tensor
+        # DATA SHAPE [z, t, c, y, x]
         try:
             with h5py.File(fs_file, 'r') as fr:
-                # DATA SHAPE [z, t, c, y, x]
                 if self.train:
-                    k_space = (fr['kspace_full'][:])
+                    key = 'kspace_full'
                 else: 
-                    k_space = (fr['kus'][:])
+                    key = 'kus'
+                k_space = (fr[key][:])
 
-            if not validation:
+            if self.train:
                 with h5py.File(mask_file, 'r') as fr:
-                    # DATA SHAPE [z, t, c, y, x]
                     mask = torch.as_tensor(fr['mask'][:])
 
                 with h5py.File(sense_file, 'r') as fr: 
-                    # DATA SHAPE [z, c, y, x]
                     sensetivity = torch.from_numpy(fr['sensetivity'][:])
-                    sensetivity = sensetivity[:]
-                    sensetivity[0] = sensetivity[0].abs()
+                    # normalize the phase of the first mask to 0
+                    sensetivity[:, 0] = sensetivity[:, 0].abs()
+
         except OSError as e: 
             print(f'os error: {e}')
             print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
         except IndexError as e: 
             print(f'os error: {e}')
             print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
-        except:
+        except Exception as e:
+            print(f'error {e}')
             print(f"ERROR")
             print(f"couldn't find one of these files! {fs_file} {mask_file} {sense_file}")
+            raise 
 
         
         # data shape [z, c, y , x]
-        if not validation:
+        if self.train:
             mask = mask.bool()
         else:
             mask = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
             sensetivity = torch.as_tensor(np.ones((k_space.shape[1], k_space.shape[2], k_space.shape[3]), dtype=int))
+
         if self.task_one:
             mask = mask.unsqueeze(0)
 
-        
         k_space = torch.from_numpy(k_space['real'] + 1j * k_space['imag'])
         sensetivity = sensetivity.unsqueeze(1)
 
         mask = mask.unsqueeze(1)
-        if not validation:
+        if self.train:
             training_sample = (k_space*mask, k_space, sensetivity)
         else:
             training_sample = (k_space, k_space, sensetivity)

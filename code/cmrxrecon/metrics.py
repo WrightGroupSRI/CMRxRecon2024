@@ -28,7 +28,7 @@ class metrics(pl.LightningModule):
         Returns:
         torch.Tensor: The SSIM value.
         """
-        data_range = ground_truth.max() - ground_truth.min()
+        data_range = ground_truth.max()
         ssim_metric = StructuralSimilarityIndexMeasure(data_range=data_range.item()).to(device)
         return ssim_metric(ground_truth, predicted)
 
@@ -44,7 +44,7 @@ class metrics(pl.LightningModule):
         Returns:
         torch.Tensor: The PSNR value.
         """
-        data_range = ground_truth.max() - ground_truth.min()
+        data_range = ground_truth.max()
         psnr_metric = PeakSignalNoiseRatio(data_range=data_range.item()).to(device)
         return psnr_metric(ground_truth, predicted)
 

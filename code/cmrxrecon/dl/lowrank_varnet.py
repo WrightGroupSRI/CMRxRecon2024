@@ -15,25 +15,31 @@ from cmrxrecon.utils import view_as_real, view_as_complex, fft_2d_img, ifft_2d_i
 
 
 class LowRankLightning(pl.LightningModule):
-    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3):
+    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3, pass_single_basis=True):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
-        self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans)
+        self.model = LowRankModl(cascades=cascades, unet_chans=unet_chans, pass_single_basis=pass_single_basis)
         self.loss_fn = lambda x, y: torch.nn.functional.l1_loss(torch.view_as_real(x), torch.view_as_real(y))
 
     def forward(self, undersampled, mask, sense):
         fs_estimate = self.model(undersampled, mask, sense)
         return fs_estimate
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_index: int): 
-        undersampled, fully_sampled, sense = batch
+    def training_step(self, 
+                      batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict], 
+                      batch_index: int
+                      ): 
+        undersampled, fully_sampled, sense, _ = batch
 
         fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         gt_imgs = self.rss(fully_sampled)
         es_imgs = self.rss(fs_estimate)
+
+        gt_imgs = (gt_imgs - gt_imgs.mean())/gt_imgs.std()
+        es_imgs = (es_imgs - es_imgs.mean())/es_imgs.std()
         ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
         ssim_loss = 1 - ssim
 
@@ -41,7 +47,7 @@ class LowRankLightning(pl.LightningModule):
         self.log('train/l1', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
         self.log('train/ssim', ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
 
-        loss = loss + 1e-1 * ssim_loss
+        loss = loss + ssim_loss
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
@@ -86,17 +92,19 @@ class LowRankLightning(pl.LightningModule):
 
 
     def validation_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
+        undersampled, fully_sampled, sense, _ = batch
 
         fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
-        estimate_images = self.rss(fs_estimate)
-        ground_truth_images = self.rss(fully_sampled)
+        es_imgs = self.rss(fs_estimate)
+        gt_imgs = self.rss(fully_sampled)
+        gt_imgs = (gt_imgs - gt_imgs.mean())/gt_imgs.std()
+        es_imgs = (es_imgs - es_imgs.mean())/es_imgs.std()
 
-        ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
-        nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
-        psnr = metrics.calculate_psnr(ground_truth_images, estimate_images, self.device)
+        ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
+        nmse = metrics.calculate_nmse(gt_imgs, es_imgs)
+        psnr = metrics.calculate_psnr(gt_imgs, es_imgs, self.device)
 
         self.log_dict(
                 {'val/loss': loss, 'val/ssim': ssim, 'val/psnr': psnr, 'val/nmse': nmse},
@@ -104,14 +112,14 @@ class LowRankLightning(pl.LightningModule):
                 )
         if batch_index == 0:  # Log only for the first batch in each epoch
             # imgs [b, t, h, w]
-            grid = self.prepare_images(estimate_images, max_val=ground_truth_images.abs().max()/4)
+            grid = self.prepare_images(es_imgs, max_val=gt_imgs.abs().max()/4)
             self.logger.log_image("val/estimate_images", [wandb.Image(grid, caption="Validation Images")])
 
-            grid = self.prepare_images(ground_truth_images, max_val=ground_truth_images.abs().max()/4)
+            grid = self.prepare_images(gt_imgs, max_val=gt_imgs.abs().max()/4)
             self.logger.log_image("val/gt_images", [wandb.Image(grid, caption="Validation Ground Truth Images")])
 
             zf = self.rss(undersampled)
-            grid = self.prepare_images(zf, max_val=ground_truth_images.abs().max()/4)
+            grid = self.prepare_images(zf, max_val=gt_imgs.abs().max()/4)
             self.logger.log_image("val/zero_filled", [wandb.Image(grid, caption="Zero Filled")])
 
         return {
@@ -121,13 +129,15 @@ class LowRankLightning(pl.LightningModule):
                 }
 
     def test_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
+        undersampled, fully_sampled, sense, _ = batch
 
         fs_estimate = self.model(undersampled, undersampled != 0, sense)
         
         loss = self.loss_fn(fully_sampled, fs_estimate)
         estimate_images = self.rss(fs_estimate)
         ground_truth_images = self.rss(fully_sampled)
+        gt_imgs = (gt_imgs - gt_imgs.mean())/gt_imgs.std()
+        es_imgs = (es_imgs - es_imgs.mean())/es_imgs.std()
 
         ssim = metrics.calculate_ssim(ground_truth_images, estimate_images, self.device)
         nmse = metrics.calculate_nmse(ground_truth_images, estimate_images)
@@ -163,20 +173,26 @@ class LowRankModl(nn.Module):
     def __init__(self, 
                  cascades:int = 6,
                  unet_chans: int = 18, 
-                 singular_cutoff:int = 3
+                 singular_cutoff:int = 3,
+                 pass_single_basis:bool = False
                  ):
         super().__init__()
 
         # module for cascades
         self.cascade = nn.ModuleList()
         self.singular_cuttoff = singular_cutoff
+        self.pass_single_basis = pass_single_basis
         
         # populate cascade with model backbone
-        spatial_denoiser = partial(Unet, 2, 2, chans=unet_chans)
+        if pass_single_basis:
+            spatial_denoiser = partial(Unet, 2, 2, chans=unet_chans)
+        else:
+            spatial_denoiser = partial(Unet, 2*singular_cutoff, 2*singular_cutoff, chans=unet_chans)
+
         #temporal_denoiser = partial(ResNet, 2, 2, chans=unet_chans//2, dimension='1d')
         #temporal_denoiser = None
         self.cascades = nn.ModuleList(
-            [model_step(spatial_denoiser(), None) for _ in range(cascades)]
+            [model_step(spatial_denoiser(), None, pass_single_basis) for _ in range(cascades)]
         )
 
         # model to estimate sensetivities
@@ -240,7 +256,7 @@ class LowRankModl(nn.Module):
         estimated_k_space = fft_2d_img(coil_images)
         
         #only estimate k-space locations that are unsampled
-        return estimated_k_space * ~mask + reference_k
+        return estimated_k_space 
 
 
 """
@@ -363,25 +379,29 @@ class cg_data_consistency_L(cg_data_consistency):
 
 
 class model_step(nn.Module):
-    def __init__(self, spatial_model: nn.Module, temporal_model: nn.Module) -> None:
+    def __init__(self, spatial_model: nn.Module, temporal_model: nn.Module, pass_single_basis) -> None:
         super().__init__()
         self.spatial_model = spatial_model
         #self.temporal_model = temporal_model
-        self.cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1)
-        #self.cg_temporal = cg_data_consistency_L(iterations=10, lambda_reg=1)
+        self.pass_single_basis = pass_single_basis
+        self.cg_spatial = cg_data_consistency_R(iterations=4, lambda_reg=1e-1)
+        #self.cg_temporal = cg_data_consistency_L(iterations=4, lambda_reg=1e-1)
 
     def pass_spatial_basis_through_model(self, spatial_basis):
         b, sv, h, w = spatial_basis.shape
         # norm spatial basis
         normed_basis, mean, std = self.norm(spatial_basis)
         
-        normed_basis = normed_basis.view(b * sv, 1, h, w)
+        if self.pass_single_basis:
+            normed_basis = normed_basis.view(b * sv, 1, h, w)
         
         # view as real from complex data and pass through model
         normed_basis = view_as_real(normed_basis)
         denoised_spatail_basis = self.spatial_model(normed_basis) 
         denoised_spatail_basis = view_as_complex(denoised_spatail_basis)
-        denoised_spatail_basis = denoised_spatail_basis.view(b, sv, h, w)
+
+        if self.pass_single_basis:
+            denoised_spatail_basis = denoised_spatail_basis.view(b, sv, h, w)
         
         # solve conjugate graident problem
         denoised_spatail_basis = self.unnorm(denoised_spatail_basis, mean, std)
@@ -422,7 +442,7 @@ class model_step(nn.Module):
     def norm(self, x: torch.Tensor, dims=2) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # instance norm
         if dims == 2:
-            mean = x.mean(dim=(-1, -2), keepdim=True)
+            mean = x.std(dim=(-1, -2), keepdim=True)#x.mean(dim=(-1, -2), keepdim=True)
             std = x.std(dim=(-1, -2), keepdim=True) + 1e-9
         elif dims == 1: 
             mean = x.mean(dim=(-1), keepdim=True)

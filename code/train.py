@@ -41,7 +41,7 @@ def main(args):
     #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".h5")
     if args.model == 'lowrank':
-        model = LowRankLightning(cascades=5, unet_chans=64, lr=args.lr)
+        model = LowRankLightning(cascades=5, unet_chans=40, lr=args.lr, pass_single_basis=args.single_basis)
         if args.checkpoint_path: 
             model = LowRankLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'varnet':
@@ -49,7 +49,7 @@ def main(args):
     elif args.model == 'unet':
         model = UnetLightning(1, lr=args.lr, chan=32)
     elif args.model == 'spatial':
-        model = SpatialDenoiser(lr=args.lr, single_channel=False, is_complex=False)
+        model = SpatialDenoiser(lr=args.lr, single_channel=args.single_basis, is_complex=False)
         if args.checkpoint_path: 
             model = SpatialDenoiser.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'temporal':
@@ -59,7 +59,6 @@ def main(args):
     else:
         raise ValueError(f'{args.model} not implemented!')
     
-    #wandb_logger.experiment.update({'model': args.model})
 
     profiler = PyTorchProfiler(export_to_chrome=True, filename="prof")
     trainer = pl.Trainer(
@@ -75,7 +74,7 @@ def main(args):
 
     if trainer.global_rank == 0: 
         wandb_logger.experiment.config.update({'model': args.model})
-        wandb_logger.watch(model, log="all")
+        #wandb_logger.watch(model, log="all")
     trainer.fit(model=model, datamodule=data_module, ckpt_path=args.checkpoint_path)
     trainer.test(model=model, datamodule=data_module)
 
@@ -92,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--limit_batches', type=float, default=1.0)
     parser.add_argument('--checkpoint_path', type=str)
     parser.add_argument('--resubmit', action='store_true')
+    parser.add_argument('--single_basis', action='store_true')
 
     args = parser.parse_args()
     main(args)

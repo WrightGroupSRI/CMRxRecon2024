@@ -31,7 +31,7 @@ class SpatialDenoiser(pl.LightningModule):
         self.loss_fn = lambda x, y: torch.nn.functional.mse_loss((x), (y))
 
     def pass_through_model(self, batch):
-        undersampled, fully_sampled, sense = batch
+        undersampled, fully_sampled, sense, _ = batch
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
         spatial_basis = spatial_basis / spatial_basis.abs().amax((-1, -2), keepdim=True)
@@ -139,7 +139,7 @@ class SpatialDenoiser(pl.LightningModule):
         return loss
         
     def test_step(self, batch, batch_index): 
-        undersampled, fully_sampled, sense = batch
+        undersampled, fully_sampled, sense, _ = batch
         
         spatial_basis, _ = self.estimate_inital_bases(undersampled, sense, undersampled != 0)
         spatial_basis = view_as_real(spatial_basis)
