@@ -126,9 +126,9 @@ class UnpadKSPace(object):
     def __call__(self, output, original_shape):
         y = output.shape[-2]
         x = output.shape[-1]
-        diff_y = original_shape[0] - y 
-        diff_x = original_shape[1] - x 
-        return output[..., diff_y//2:original_shape[0], diff_x//2: original_shape[1]]
+        diff_y = y - original_shape[0]  
+        diff_x = x - original_shape[1]  
+        return output[..., diff_y//2:diff_y//2+original_shape[0], diff_x//2:diff_x//2+original_shape[1]]
 
         
         
