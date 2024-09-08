@@ -11,7 +11,7 @@
 ###############################################################
 
 import numpy as np
-from .bartutils import bart
+from bart import bart
 
 # Function to estimate maps 
 def calc_maps(kspace=None, mask=None):
@@ -20,7 +20,7 @@ def calc_maps(kspace=None, mask=None):
 
     array_for_maps_calc = kspace[:, :, :, :, 0]
 
-    maps = np.zeros([shx, shy, shz, shc, 2], dtype=complex)
+    maps = np.zeros([shx, shy, shz, shc], dtype=complex)
 
     # loop over slices
     for i in range(shz):
@@ -29,9 +29,9 @@ def calc_maps(kspace=None, mask=None):
 
         # TODO get the calibration region using the mask (largest connected component?)
         # m_ = bart(1, 'ecalib -S -g -d1 -m2 -a -r1:48:9', maps_kspace)
-        m_ = bart(1, 'ecalib -S -g -d1 -m2 -a', maps_kspace)
+        m_ = bart(1, 'ecalib -S -d1 -m1 -c 0.99 -t 0.00005 -r 16:16', maps_kspace)
 
-        maps[:, :, i, :, :] = np.squeeze(m_)
+        maps[:, :, i, :] = np.squeeze(m_)
 
     return maps
 
