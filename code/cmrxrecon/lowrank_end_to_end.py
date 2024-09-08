@@ -61,15 +61,38 @@ def lowrank_e2e(kspace: np.ndarray, device, lambda_reg=1e-1, weights_dir=None):
     maps = maps.to(torch.complex64)
     maps = maps.to(device)
     with torch.no_grad():
-        for i in range(recon_k_space.shape[0]):
-            model_kspace, _, padded_maps, transform_params = pad(norm((kspace[i], kspace[i], maps[i], {})))
-            model_kspace = model_kspace.unsqueeze(0)
-            padded_maps = padded_maps.unsqueeze(0)
-            estimate_k = solver(model_kspace, model_kspace != 0, padded_maps)
-            estimate_k = estimate_k[0]
+        model_kspace_list = []
+        padded_maps_list = []
+        transform_params_list = []
 
-            estimate_k = unnorm(unpad(estimate_k, transform_params['original_size']), transform_params['scaling_factor'])
-            recon_k_space[i] = estimate_k
+        # Loop over each slice to apply norm and pad functions
+        for i in range(kspace.shape[0]):
+            model_kspace_slice, _, padded_maps_slice, transform_params = pad(norm((kspace[i], kspace[i], maps[i], {})))
+            
+            model_kspace_list.append(model_kspace_slice)
+            padded_maps_list.append(padded_maps_slice)
+            transform_params_list.append(transform_params)
+
+        # Stack all the slices along the batch dimension
+        model_kspace = torch.stack(model_kspace_list, dim=0)
+        padded_maps = torch.stack(padded_maps_list, dim=0)
+
+        # Call the solver on the entire volume
+        estimate_k = solver(model_kspace, model_kspace != 0, padded_maps)
+
+        # Apply unpad and unnorm slice by slice
+        for i in range(recon_k_space.shape[0]):
+            estimate_k_slice = estimate_k[i]
+            
+            # Retrieve the corresponding transform parameters for the slice
+            transform_params = transform_params_list[i]
+            
+            # Unpad and unnorm for the slice
+            estimate_k_slice = unnorm(unpad(estimate_k_slice, transform_params['original_size']), transform_params['scaling_factor'])
+            recon_k_space[i] = estimate_k_slice
+
+
+
 
     # z, t, y, x
     recon_images = root_sum_of_squares(ifft_2d_img(recon_k_space), coil_dim=2)
