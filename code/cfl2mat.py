@@ -11,7 +11,6 @@
 ###############################################################
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 import os
 import sys
@@ -21,7 +20,7 @@ import time
 
 import math
 
-import cfl
+from cflutils import readcfl
 from utils import writemat, loadmat, try_dir
 
 def xycrop(image, crop_size):
@@ -51,7 +50,7 @@ def main(data_path, dest_path):
                 #ref_fpath = os.path.join(ref_path, "MultiCoil", modality, "ValidationSet", "Task2", pt, f.split("/")[-1].split(".cfl")[0])
                 #x_ref = loadmat(key="img4ranking", path=ref_fpath)
 
-                x = np.abs(cfl.readcfl(f.split(".cfl")[0]))
+                x = np.abs(readcfl(f.split(".cfl")[0]))
 
                 #x_crop = xycrop(x, x_ref.shape)
 

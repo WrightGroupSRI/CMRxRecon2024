@@ -186,11 +186,11 @@ def main(args):
                         torch.cuda.empty_cache()
                         gc.collect()
 
-                # break # mat file
+                break # mat file
 
-            # break # patients
+            break # patients
 
-        # break # modalities
+        break # modalities
 
 
 if __name__ == '__main__': 
