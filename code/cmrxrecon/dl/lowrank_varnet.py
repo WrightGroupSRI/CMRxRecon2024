@@ -12,7 +12,8 @@ import pytorch_lightning as pl
 from torchvision.utils import make_grid
 from cmrxrecon.utils import view_as_real, view_as_complex, fft_2d_img, ifft_2d_img
 
-
+def normL1Loss(pred, target):
+    return torch.sum(torch.abs(pred - target)/torch.abs(target).sum((-1, -2), keepdim=True))
 
 class LowRankLightning(pl.LightningModule):
     def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3, pass_single_basis=True):
@@ -38,8 +39,10 @@ class LowRankLightning(pl.LightningModule):
         gt_imgs = self.rss(fully_sampled)
         es_imgs = self.rss(fs_estimate)
 
-        gt_imgs = (gt_imgs - gt_imgs.mean())/gt_imgs.std()
-        es_imgs = (es_imgs - es_imgs.mean())/es_imgs.std()
+        gt_imgs = (gt_imgs - gt_imgs.mean((-1, -2), keepdim=True))/gt_imgs.std((-1, 2), keepdim=True)
+        es_imgs = (es_imgs - es_imgs.mean((-1, -2), keepdim=True))/es_imgs.std((-1, 2), keepdim=True)
+        gt_imgs = gt_imgs.reshape(-1, 1, gt_imgs.shape[-2], gt_imgs.shape[-1])
+        es_imgs = es_imgs.reshape(-1, 1, es_imgs.shape[-2], es_imgs.shape[-1])
         ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
         ssim_loss = 1 - ssim
 
@@ -99,8 +102,11 @@ class LowRankLightning(pl.LightningModule):
         loss = self.loss_fn(fully_sampled, fs_estimate)
         es_imgs = self.rss(fs_estimate)
         gt_imgs = self.rss(fully_sampled)
-        gt_imgs = (gt_imgs - gt_imgs.mean())/gt_imgs.std()
-        es_imgs = (es_imgs - es_imgs.mean())/es_imgs.std()
+        gt_imgs = (gt_imgs - gt_imgs.mean((-1, -2), keepdim=True))/gt_imgs.std((-1, -2), keepdim=Trues)
+        es_imgs = (es_imgs - es_imgs.mean((-1, -2), keepdim=True))/es_imgs.std((-1, -2), keepdim=Trues)
+        gt_imgs = gt_imgs.reshape(-1, 1, gt_imgs.shape[-2], gt_imgs.shape[-1])
+        es_imgs = es_imgs.reshape(-1, 1, es_imgs.shape[-2], es_imgs.shape[-1])
+
 
         ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
         nmse = metrics.calculate_nmse(gt_imgs, es_imgs)

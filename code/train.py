@@ -41,7 +41,7 @@ def main(args):
     #checkpoint_callback = ModelCheckpoint(dirpath="cmrxrecon/dl/model_weights/", save_top_k=1, monitor="val/loss")
     data_module = AllContrastDataModule(data_dir=args.data_dir, batch_size=args.batch_size, num_workers=args.num_workers, file_extension=".h5")
     if args.model == 'lowrank':
-        model = LowRankLightning(cascades=5, unet_chans=40, lr=args.lr, pass_single_basis=args.single_basis)
+        model = LowRankLightning(cascades=args.cascades, unet_chans=args.channels, lr=args.lr, pass_single_basis=args.single_basis)
         if args.checkpoint_path: 
             model = LowRankLightning.load_from_checkpoint(args.checkpoint_path, lr=args.lr)
     elif args.model == 'varnet':
@@ -92,6 +92,8 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_path', type=str)
     parser.add_argument('--resubmit', action='store_true')
     parser.add_argument('--single_basis', action='store_true')
+    parser.add_argument('--cascades', type=int, default=5)
+    parser.add_argument('--channels', type=int, default=40)
 
     args = parser.parse_args()
     main(args)
