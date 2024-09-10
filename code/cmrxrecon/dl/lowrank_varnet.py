@@ -16,7 +16,7 @@ def normL1Loss(pred, target):
     return torch.sum(torch.abs(pred - target)/torch.abs(target).sum((-1, -2), keepdim=True))
 
 class LowRankLightning(pl.LightningModule):
-    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3, pass_single_basis=True):
+    def __init__(self, cascades:int = 2, unet_chans:int = 32, lr=1e-3, pass_single_basis=False):
         super().__init__()
         self.save_hyperparameters()
         self.lr = lr
@@ -41,16 +41,19 @@ class LowRankLightning(pl.LightningModule):
 
         gt_imgs = (gt_imgs - gt_imgs.mean((-1, -2), keepdim=True))/gt_imgs.std((-1, 2), keepdim=True)
         es_imgs = (es_imgs - es_imgs.mean((-1, -2), keepdim=True))/es_imgs.std((-1, 2), keepdim=True)
+        b, t, h, w = gt_imgs.shape
         gt_imgs = gt_imgs.reshape(-1, 1, gt_imgs.shape[-2], gt_imgs.shape[-1])
         es_imgs = es_imgs.reshape(-1, 1, es_imgs.shape[-2], es_imgs.shape[-1])
         ssim = metrics.calculate_ssim(gt_imgs, es_imgs, self.device)
+        gt_imgs = gt_imgs.reshape(b, t, h, w)
+        es_imgs = es_imgs.reshape(b, t, h, w)
         ssim_loss = 1 - ssim
 
         self.log('train/loss', loss + ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
         self.log('train/l1', loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
-        self.log('train/ssim', ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
+        self.log('train/ssim', 1e-2 * ssim_loss, on_step=True, prog_bar=True, logger=True, on_epoch=True, sync_dist=True)
 
-        loss = loss + ssim_loss
+        loss = loss + 1e-2 * ssim_loss
         
         if batch_index == 0:  # Log only for the first batch in each epoch
             with torch.no_grad():
@@ -262,7 +265,7 @@ class LowRankModl(nn.Module):
         estimated_k_space = fft_2d_img(coil_images)
         
         #only estimate k-space locations that are unsampled
-        return estimated_k_space 
+        return estimated_k_space * ~mask + reference_k
 
 
 """
